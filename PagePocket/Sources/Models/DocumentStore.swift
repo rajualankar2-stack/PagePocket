@@ -15,12 +15,15 @@ final class DocumentStore: ObservableObject {
     // MARK: - Locations
 
     /// `Documents/` — user-visible content root.
-    static var documentsRoot: URL {
+    ///
+    /// Non-isolated because `Document` (a plain value type) builds file URLs
+    /// from it, and those are not main-actor bound.
+    nonisolated static var documentsRoot: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
     /// `Library/Application Support/PagePocket/` — private metadata.
-    private static var supportRoot: URL {
+    nonisolated private static var supportRoot: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("PagePocket", isDirectory: true)
     }
