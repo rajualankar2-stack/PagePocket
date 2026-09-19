@@ -341,3 +341,119 @@ final class PagePocketUITests: XCTestCase {
         )
     }
 }
+
+// MARK: - Developer tools
+
+/// Covers the JavaScript runner and the page-settings sheet, which the
+/// rendering tests do not reach.
+final class PagePocketDevToolsUITests: XCTestCase {
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    private func launch(opening document: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-UITests", "-AutoOpenDocument", document]
+        app.launch()
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 60),
+                      "The document should open.")
+        return app
+    }
+
+    /// The JS runner must evaluate against the live page and show the result.
+    func testScriptRunnerEvaluatesAgainstThePage() throws {
+        let app = launch(opening: "Welcome")
+
+        // Wait for the page to settle before driving the toolbar.
+        let heading = app.webViews.firstMatch.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Your HTML"))
+            .firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 45), "The page should render first.")
+
+        app.buttons["Options"].tap()
+        app.buttons["Run JavaScript"].tap()
+
+        XCTAssertTrue(app.staticTexts["JavaScript"].waitForExistence(timeout: 20),
+                      "The JavaScript sheet should open.")
+
+        let editor = app.textViews.firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 15), "The editor should be present.")
+        editor.tap()
+        editor.typeText("document.title")
+
+        app.buttons["Run"].tap()
+
+        // The sample's <title> is "Welcome to PagePocket".
+        let result = app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Welcome to PagePocket"))
+            .firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 30),
+                      "The runner should show the evaluated document.title.")
+    }
+
+    /// Page settings must open and offer the document's details.
+    func testPageSettingsShowsDocumentDetails() throws {
+        let app = launch(opening: "Welcome")
+
+        app.buttons["Options"].tap()
+        app.buttons["Page Settings"].tap()
+
+        XCTAssertTrue(app.staticTexts["Page Settings"].waitForExistence(timeout: 20),
+                      "The settings sheet should open.")
+
+        // The served loopback URL should be surfaced for copying.
+        let urlLabel = app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "127.0.0.1"))
+            .firstMatch
+        XCTAssertTrue(urlLabel.waitForExistence(timeout: 20),
+                      "The local server URL should be shown.")
+    }
+
+    /// Full-screen mode must always offer a visible way back. The exit control
+    /// deliberately does NOT live in the navigation bar, because that bar is
+    /// hidden in full screen — putting it there would trap the user.
+    func testImmersiveModeToggles() throws {
+        let app = launch(opening: "Welcome")
+
+        let fullScreen = app.buttons["browser.fullscreen"]
+        XCTAssertTrue(fullScreen.waitForExistence(timeout: 30),
+                      "The full-screen button should exist.")
+        fullScreen.tap()
+
+        let exit = app.buttons["browser.exitFullscreen"]
+        XCTAssertTrue(exit.waitForExistence(timeout: 20),
+                      "Full screen must offer a visible way out.")
+
+        exit.tap()
+        XCTAssertTrue(app.buttons["browser.fullscreen"].waitForExistence(timeout: 20),
+                      "Leaving full screen should restore the toolbar.")
+    }
+
+    /// Reloading must re-serve the document from the local server.
+    func testReloadKeepsTheDocumentWorking() throws {
+        let app = launch(opening: "Welcome")
+
+        let webView = app.webViews.firstMatch
+        let counter = webView.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Tapped 0 times"))
+            .firstMatch
+        XCTAssertTrue(counter.waitForExistence(timeout: 45))
+        counter.tap()
+
+        let afterTap = webView.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Tapped 1 time"))
+            .firstMatch
+        XCTAssertTrue(afterTap.waitForExistence(timeout: 20))
+
+        app.buttons["browser.reload"].tap()
+
+        // After reload the page resets to its initial state, proving the file
+        // was served again rather than kept alive in memory.
+        let reset = webView.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Tapped 0 times"))
+            .firstMatch
+        XCTAssertTrue(reset.waitForExistence(timeout: 45),
+                      "Reload should re-serve the document from the server.")
+    }
+}

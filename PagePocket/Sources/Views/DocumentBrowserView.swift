@@ -38,6 +38,12 @@ struct DocumentBrowserView: View {
             if !isImmersive {
                 bottomBar
             }
+
+            // Full screen hides the navigation bar, so the ONLY way out must not
+            // live inside that bar. This floating control is the escape hatch.
+            if isImmersive {
+                immersiveExitButton
+            }
         }
         .navigationTitle(isImmersive ? "" : session.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -178,20 +184,39 @@ struct DocumentBrowserView: View {
         session.engine.consoleMessages.contains { $0.level == .error }
     }
 
+    /// The escape hatch shown while full screen, floating above the page.
+    private var immersiveExitButton: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { isImmersive = false }
+                } label: {
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(11)
+                        .background(.black.opacity(0.45), in: Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+                }
+                .accessibilityLabel("Exit full screen")
+                .accessibilityIdentifier("browser.exitFullscreen")
+                // Keep it clear of the status bar / notch.
+                .padding(.top, 8)
+                .padding(.trailing, 14)
+            }
+            Spacer()
+        }
+        .transition(.opacity)
+    }
+
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
     private var navigationToolbar: some ToolbarContent {
-        if isImmersive {
-            // A single way out of full screen, floating over the page.
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isImmersive = false
-                } label: {
-                    Label("Exit Full Screen", systemImage: "arrow.down.right.and.arrow.up.left")
-                }
-            }
-        } else {
+        // The bar is hidden entirely in full screen, so the exit control is
+        // rendered as a floating overlay instead (see immersiveExitButton).
+        if !isImmersive {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
