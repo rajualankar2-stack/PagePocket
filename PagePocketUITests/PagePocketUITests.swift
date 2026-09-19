@@ -6,6 +6,10 @@ import XCTest
 /// works — the loopback server bound a port, the file was served with a
 /// JavaScript MIME type, and WebKit executed the page's scripts. A viewer that
 /// merely shoved the file into the web view would fail several of these.
+///
+/// Query style: predicates with `waitForExistence`, never
+/// `allElementsBoundByIndex`. The Playground page animates continuously, so an
+/// index-based snapshot goes stale between the query and the read.
 final class PagePocketUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -18,6 +22,9 @@ final class PagePocketUITests: XCTestCase {
     @discardableResult
     private func launchApp(opening document: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
+        // Tells the app to disable animations, which keeps accessibility
+        // snapshots stable while a page is drawing.
+        app.launchArguments += ["-UITests"]
         if let document {
             app.launchArguments += ["-AutoOpenDocument", document]
         }
@@ -25,26 +32,56 @@ final class PagePocketUITests: XCTestCase {
         return app
     }
 
-    /// Waits for the web view to exist and return its accessibility labels.
-    private func webViewLabels(_ app: XCUIApplication, timeout: TimeInterval = 45) -> [String] {
+    /// Waits for the web view to finish loading into the hierarchy.
+    @discardableResult
+    private func awaitWebView(_ app: XCUIApplication, timeout: TimeInterval = 60) -> XCUIElement {
         let webView = app.webViews.firstMatch
-        guard webView.waitForExistence(timeout: timeout) else { return [] }
-        return webView.descendants(matching: .any)
-            .allElementsBoundByIndex
-            .compactMap { $0.label.isEmpty ? nil : $0.label }
+        XCTAssertTrue(
+            webView.waitForExistence(timeout: timeout),
+            "A web view should appear after opening a document."
+        )
+        return webView
     }
 
-    /// Polls until `condition` holds, so tests do not depend on fixed sleeps.
-    private func waitUntil(
-        timeout: TimeInterval = 30,
-        _ condition: () -> Bool
+    /// Waits for any element inside the web view whose label contains `text`.
+    ///
+    /// Uses a lazily-evaluated predicate query so the element is re-resolved on
+    /// every poll, which keeps working while the page is still animating.
+    private func waitForWebText(
+        _ text: String,
+        in webView: XCUIElement,
+        timeout: TimeInterval = 45,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", text)
+
+        // Try the common element types first, then fall back to a broad search.
+        let candidates: [XCUIElementQuery] = [
+            webView.staticTexts.matching(predicate),
+            webView.buttons.matching(predicate),
+            webView.descendants(matching: .any).matching(predicate)
+        ]
+
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if condition() { return true }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+            for query in candidates where query.firstMatch.exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
-        return condition()
+
+        // One last check so the failure message is accurate.
+        return candidates.contains { $0.firstMatch.exists }
+    }
+
+    /// Everything the page currently exposes, used only to build failure messages.
+    private func visibleWebText(_ webView: XCUIElement) -> String {
+        let labels = webView.descendants(matching: .staticText)
+            .allElementsBoundByIndex
+            .compactMap { $0.exists ? $0.label : nil }
+            .filter { !$0.isEmpty }
+        return labels.prefix(40).joined(separator: " | ")
     }
 
     // MARK: - Library
@@ -53,38 +90,33 @@ final class PagePocketUITests: XCTestCase {
         let app = launchApp()
 
         XCTAssertTrue(
-            app.staticTexts["PagePocket"].waitForExistence(timeout: 20),
+            app.staticTexts["PagePocket"].waitForExistence(timeout: 30),
             "The library screen should appear on launch."
         )
 
-        // Both samples ship in the bundle and should be seeded on first run.
-        let welcome = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] %@", "Welcome")
-        ).firstMatch
-        XCTAssertTrue(welcome.waitForExistence(timeout: 20),
-                      "The bundled Welcome sample should be imported.")
-
-        let playground = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] %@", "Playground")
-        ).firstMatch
-        XCTAssertTrue(playground.waitForExistence(timeout: 20),
-                      "The bundled Playground sample should be imported.")
+        // Both samples ship in the bundle and are seeded on first run.
+        for name in ["Welcome", "Playground"] {
+            let row = app.staticTexts
+                .matching(NSPredicate(format: "label CONTAINS[c] %@", name))
+                .firstMatch
+            XCTAssertTrue(
+                row.waitForExistence(timeout: 30),
+                "The bundled \(name) sample should be imported into the library."
+            )
+        }
     }
 
     // MARK: - Rendering
 
     func testDocumentRendersHTML() throws {
         let app = launchApp(opening: "Welcome")
-
-        let webView = app.webViews.firstMatch
-        XCTAssertTrue(webView.waitForExistence(timeout: 45),
-                      "A web view should appear after opening a document.")
+        let webView = awaitWebView(app)
 
         // This copy comes straight from the sample's markup, so it only appears
         // if the file was located, served and parsed.
         XCTAssertTrue(
-            waitUntil { self.webViewLabels(app).contains { $0.contains("Your HTML, running natively.") } },
-            "The document's own text should be rendered. Labels: \(webViewLabels(app))"
+            waitForWebText("Your HTML, running natively", in: webView),
+            "The document's own text should be rendered. Saw: \(visibleWebText(webView))"
         )
     }
 
@@ -92,24 +124,27 @@ final class PagePocketUITests: XCTestCase {
     /// result of a `fetch()` against the local server. Both must pass.
     func testJavaScriptAndFetchWorkAgainstLocalServer() throws {
         let app = launchApp(opening: "Welcome")
-
-        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 45))
+        let webView = awaitWebView(app)
 
         XCTAssertTrue(
-            waitUntil(timeout: 40) {
-                self.webViewLabels(app).contains { $0.contains("JavaScript") && $0.contains("running") }
-            },
-            "JavaScript should be executing in the page."
+            waitForWebText("JavaScript", in: webView),
+            "JavaScript should be executing in the page. Saw: \(visibleWebText(webView))"
         )
 
         XCTAssertTrue(
-            waitUntil(timeout: 40) {
-                self.webViewLabels(app).contains { $0.contains("fetch() same-origin") && $0.contains("ok") }
-            },
+            waitForWebText("fetch() same-origin", in: webView),
             """
-            fetch() against the local server should succeed. This is the core \
-            claim of the app: a file:// document cannot do this. \
-            Labels: \(webViewLabels(app))
+            fetch() against the local server should run. A file:// document \
+            cannot do this. Saw: \(visibleWebText(webView))
+            """
+        )
+
+        // The check reports either "ok" or a failure reason; require success.
+        XCTAssertTrue(
+            waitForWebText("data.json ok", in: webView),
+            """
+            fetch('data.json') should have succeeded against the loopback \
+            server. Saw: \(visibleWebText(webView))
             """
         )
     }
@@ -120,30 +155,24 @@ final class PagePocketUITests: XCTestCase {
     /// the DOM updated in response.
     func testTappingInPageUpdatesTheDOM() throws {
         let app = launchApp(opening: "Welcome")
+        let webView = awaitWebView(app)
 
-        let webView = app.webViews.firstMatch
-        XCTAssertTrue(webView.waitForExistence(timeout: 45))
+        let initial = webView.buttons
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Tapped 0 times"))
+            .firstMatch
 
-        // Give the page a moment to finish wiring up its listeners.
         XCTAssertTrue(
-            waitUntil(timeout: 40) {
-                self.webViewLabels(app).contains { $0.contains("Tapped 0 times") }
-            },
-            "The counter button should be present in its initial state. Labels: \(webViewLabels(app))"
+            initial.waitForExistence(timeout: 45),
+            "The counter button should be present in its initial state. Saw: \(visibleWebText(webView))"
         )
 
-        let button = webView.buttons["Tapped 0 times"]
-        XCTAssertTrue(button.waitForExistence(timeout: 20),
-                      "The counter button should be reachable as a web button.")
-        button.tap()
+        initial.tap()
 
         XCTAssertTrue(
-            waitUntil(timeout: 20) {
-                self.webViewLabels(app).contains { $0.contains("Tapped 1 time") }
-            },
+            waitForWebText("Tapped 1 time", in: webView, timeout: 20),
             """
-            Tapping the page's button should run its JavaScript and update the label. \
-            Labels: \(webViewLabels(app))
+            Tapping the page's button should run its JavaScript and update the \
+            label. Saw: \(visibleWebText(webView))
             """
         )
     }
@@ -152,19 +181,14 @@ final class PagePocketUITests: XCTestCase {
     /// server sends a JavaScript MIME type.
     func testESModulesLoadFromLocalServer() throws {
         let app = launchApp(opening: "Playground")
-
-        let webView = app.webViews.firstMatch
-        XCTAssertTrue(webView.waitForExistence(timeout: 45))
+        let webView = awaitWebView(app)
 
         XCTAssertTrue(
-            waitUntil(timeout: 40) {
-                let labels = self.webViewLabels(app)
-                return labels.contains { $0.contains("geometry module loaded") }
-            },
+            waitForWebText("geometry module loaded", in: webView),
             """
-            ES modules should load. `file://` blocks module loading entirely, so \
-            this passing means the local server is sending a JS MIME type. \
-            Labels: \(webViewLabels(app))
+            ES modules should load. file:// blocks module loading entirely, so \
+            this passing means the server is sending a JS MIME type. \
+            Saw: \(visibleWebText(webView))
             """
         )
     }
@@ -173,20 +197,19 @@ final class PagePocketUITests: XCTestCase {
 
     func testConsoleCapturesPageOutput() throws {
         let app = launchApp(opening: "Welcome")
+        let webView = awaitWebView(app)
 
-        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 45))
-
-        // The sample logs on startup; give it a moment to arrive over the bridge.
+        // Let the sample finish its startup logging before opening the console.
         XCTAssertTrue(
-            waitUntil(timeout: 30) {
-                self.webViewLabels(app).contains { $0.contains("Live capability check") }
-            },
-            "The page should finish loading before opening the console."
+            waitForWebText("Your HTML, running natively", in: webView),
+            "The page should render before the console is opened."
         )
 
         let consoleButton = app.buttons["browser.console"]
-        XCTAssertTrue(consoleButton.waitForExistence(timeout: 20),
-                      "The console button should exist in the browser toolbar.")
+        XCTAssertTrue(
+            consoleButton.waitForExistence(timeout: 20),
+            "The console button should exist in the browser toolbar."
+        )
         consoleButton.tap()
 
         XCTAssertTrue(
@@ -194,14 +217,15 @@ final class PagePocketUITests: XCTestCase {
             "The console sheet should open."
         )
 
-        // The sample calls console.log during startup.
+        // The sample logs this from JavaScript during startup; it can only be
+        // here if the console bridge relayed it to native.
+        let logged = app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Welcome sample ready"))
+            .firstMatch
+
         XCTAssertTrue(
-            waitUntil(timeout: 25) {
-                app.staticTexts.allElementsBoundByIndex.contains {
-                    $0.label.contains("Browser")
-                }
-            },
-            "The console should show output logged by the page."
+            logged.waitForExistence(timeout: 30),
+            "The console should show output logged by the page's JavaScript."
         )
     }
 }

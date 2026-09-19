@@ -29,7 +29,15 @@ const renderer = new RoseRenderer(canvas);
 
 // Draw one frame immediately so a screenshot taken instantly still shows art.
 renderer.draw();
-renderer.start();
+
+// Under automated UI tests, continuous animation makes accessibility snapshots
+// go stale between a query and the read. Keep the frame, skip the motion.
+const underTest = new URLSearchParams(location.search).has('static')
+  || navigator.webdriver === true;
+
+if (!underTest) {
+  renderer.start();
+}
 
 document.getElementById('canvas-dot').classList.add('ok');
 

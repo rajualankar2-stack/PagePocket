@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// App-wide services: the local server and the document store.
 ///
@@ -20,6 +21,13 @@ final class AppModel: ObservableObject {
     init() {
         startServer()
         TemporaryFiles.cleanUp()
+
+        // Keep the UI stable while automated tests are driving it: continuous
+        // animation makes accessibility snapshots go stale mid-query.
+        if ProcessInfo.processInfo.arguments.contains("-UITests") {
+            UIView.setAnimationsEnabled(false)
+            Log.app.notice("Running with UI-test stability settings.")
+        }
     }
 
     private func startServer() {
