@@ -1,0 +1,13 @@
+{
+  "servedBy": "PagePocket local HTTP server",
+  "origin": "http://127.0.0.1 (loopback only)",
+  "note": "If you can read this, fetch() works against the same origin — which is exactly what fails when HTML is opened as a bare file:// document.",
+  "capabilities": {
+    "relativeAssets": true,
+    "esModules": true,
+    "webWorkers": true,
+    "localStorage": true,
+    "indexedDB": true
+  },
+  "generatedAt": "2026-01-01T00:00:00Z"
+}

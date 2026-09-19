@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Welcome to PagePocket</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="badge">PagePocket</div>
+  <h1>Your HTML, running natively.</h1>
+  <p class="lede">
+    This document is being served from a loopback web server inside the app,
+    so everything a normal web page can do works here too.
+  </p>
+</header>
+
+<main>
+
+  <section class="card">
+    <h2>Try it</h2>
+    <p>Tap the button, drag the slider, and check the Console from the toolbar.</p>
+
+    <button id="counter" class="primary">Tapped 0 times</button>
+
+    <div class="slider-row">
+      <label for="hue">Hue</label>
+      <input id="hue" type="range" min="0" max="360" value="265">
+      <output id="hue-value">265°</output>
+    </div>
+
+    <div id="swatch" class="swatch"></div>
+  </section>
+
+  <section class="card">
+    <h2>Live capability check</h2>
+    <p class="muted">Each line is tested in your browser right now.</p>
+    <ul id="capabilities" class="checklist">
+      <li class="pending">Running checks…</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>fetch() a local file</h2>
+    <p class="muted">
+      This loads <code>data.json</code> from beside this page — the thing that
+      does not work when HTML is opened as a bare <code>file://</code> document.
+    </p>
+    <button id="load-json" class="secondary">Load data.json</button>
+    <pre id="json-output" class="output" hidden></pre>
+  </section>
+
+  <section class="card">
+    <h2>What you can do</h2>
+    <ul class="features">
+      <li><strong>Import</strong> — bring in an <code>.html</code> file, a whole folder, or a <code>.zip</code> bundle.</li>
+      <li><strong>Interact</strong> — full JavaScript, CSS, canvas, WebGL and media playback.</li>
+      <li><strong>Inspect</strong> — the Console captures logs, warnings and uncaught errors.</li>
+      <li><strong>Full screen</strong> — hide the chrome for apps and games that fill the display.</li>
+    </ul>
+  </section>
+
+  <section class="card tip">
+    <h2>Importing folders</h2>
+    <p>
+      If a page needs its own images, styles or scripts, import the
+      <strong>folder</strong> rather than the lone HTML file. PagePocket copies
+      the whole tree, so relative paths keep working.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <p>PagePocket · local HTML viewer</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

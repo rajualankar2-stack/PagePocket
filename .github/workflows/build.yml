@@ -1,0 +1,129 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & run on iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun simctl list runtimes
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project PagePocket.xcodeproj \
+            -scheme PagePocket \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee build.log | tail -80
+
+      - name: Locate built app
+        id: app
+        run: |
+          APP_PATH=$(find build/Build/Products -name "PagePocket.app" -maxdepth 3 -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::PagePocket.app was not produced"
+            exit 1
+          fi
+          echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "Found: $APP_PATH"
+          ls -la "$APP_PATH"
+
+      - name: Boot simulator
+        id: sim
+        run: |
+          # Pick the newest available iPhone runtime and a matching device.
+          RUNTIME=$(xcrun simctl list runtimes --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['runtimes']; ios=[r for r in d if r['isAvailable'] and 'iOS' in r['name']]; ios.sort(key=lambda r: r['version'], reverse=True); print(ios[0]['identifier'])")
+          echo "Using runtime: $RUNTIME"
+
+          DEVICE_TYPE=$(xcrun simctl list devicetypes --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devicetypes']; ip=[x for x in d if x['name'].startswith('iPhone')]; print(ip[-1]['identifier'])")
+          echo "Using device type: $DEVICE_TYPE"
+
+          UDID=$(xcrun simctl create "PagePocket-Test" "$DEVICE_TYPE" "$RUNTIME")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Install and launch app
+        run: |
+          UDID="${{ steps.sim.outputs.udid }}"
+          APP="${{ steps.app.outputs.path }}"
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch "$UDID" com.pagepocket.app
+          # Give the app a moment to import its sample documents and render.
+          sleep 12
+
+      - name: Capture screenshot
+        run: |
+          UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl io "$UDID" screenshot launch-library.png
+          echo "Captured library screenshot"
+          ls -la launch-library.png
+
+      - name: Verify the local server started
+        run: |
+          # The app logs its loopback port in DEBUG builds; confirm it bound a port.
+          UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl spawn "$UDID" log show \
+            --last 2m \
+            --predicate 'process == "PagePocket"' \
+            --style compact 2>/dev/null | grep -i "local server" || echo "(log line not found; non-fatal)"
+
+      - name: Collect simulator logs
+        if: always()
+        run: |
+          UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+            --predicate 'process == "PagePocket"' > simulator.log 2>/dev/null || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pagepocket-build
+          path: |
+            launch-library.png
+            build.log
+            simulator.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail if the build log contains errors
+        run: |
+          if grep -qE "error: " build.log; then
+            echo "::error::Compiler errors found in build log"
+            grep -E "error: " build.log | head -40
+            exit 1
+          fi
+          echo "No compiler errors."

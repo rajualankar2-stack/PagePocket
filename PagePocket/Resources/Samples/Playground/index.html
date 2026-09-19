@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Capability Playground</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Capability Playground</h1>
+  <p>
+    A page with a real module graph, a Web Worker, and a live canvas.
+    If all three work, local HTML is running with full web-platform fidelity.
+  </p>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h2><span class="dot" id="module-dot"></span> ES modules</h2>
+    <p class="muted">
+      This page imports <code>./js/geometry.js</code> and
+      <code>./js/render.js</code> as ES modules. Modules are blocked in
+      <code>file://</code> documents, so this is a genuine test.
+    </p>
+    <div id="module-result" class="result">Loading modules…</div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="dot" id="worker-dot"></span> Web Worker</h2>
+    <p class="muted">
+      A worker computes prime numbers off the main thread and reports progress.
+    </p>
+    <button id="run-worker">Run worker</button>
+    <div id="worker-result" class="result">Idle.</div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="dot" id="canvas-dot"></span> Canvas animation</h2>
+    <p class="muted">requestAnimationFrame driving a canvas, drawn by the imported module.</p>
+    <canvas id="stage" width="600" height="260"></canvas>
+    <div class="controls">
+      <label for="speed">Speed</label>
+      <input id="speed" type="range" min="0" max="200" value="100">
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Storage round-trip</h2>
+    <p class="muted">Values persist across reloads — reload and watch the count grow.</p>
+    <div id="storage-result" class="result">Checking…</div>
+    <button id="reset-storage" class="secondary">Reset counter</button>
+  </section>
+
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
