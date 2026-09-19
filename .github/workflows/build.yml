@@ -92,14 +92,39 @@ jobs:
           echo "Captured library screenshot"
           ls -la launch-library.png
 
-      - name: Verify the local server started
+      - name: Open a bundled document and screenshot the rendered page
         run: |
-          # The app logs its loopback port in DEBUG builds; confirm it bound a port.
+          UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl terminate "$UDID" com.pagepocket.app || true
+          # The Debug-only AutoOpenDocument hook drives straight to a rendered
+          # page, which cannot otherwise be scripted through the file picker.
+          xcrun simctl launch "$UDID" com.pagepocket.app -AutoOpenDocument Welcome
+          sleep 14
+          xcrun simctl io "$UDID" screenshot rendered-welcome.png
+          ls -la rendered-welcome.png
+
+      - name: Verify the local server started and served the page
+        run: |
           UDID="${{ steps.sim.outputs.udid }}"
           xcrun simctl spawn "$UDID" log show \
-            --last 2m \
+            --last 3m \
             --predicate 'process == "PagePocket"' \
-            --style compact 2>/dev/null | grep -i "local server" || echo "(log line not found; non-fatal)"
+            --style compact 2>/dev/null > applog.txt || true
+
+          echo "--- local server line ---"
+          grep -i "local server" applog.txt || echo "(not found)"
+          echo "--- AutoOpenDocument line ---"
+          grep -i "AutoOpenDocument" applog.txt || echo "(not found)"
+
+          if ! grep -qi "local server listening" applog.txt; then
+            echo "::error::The loopback HTTP server never reported a listening port."
+            exit 1
+          fi
+          if ! grep -qi "AutoOpenDocument: opening" applog.txt; then
+            echo "::error::The document failed to open automatically."
+            exit 1
+          fi
+          echo "Local server bound a port and the document opened."
 
       - name: Collect simulator logs
         if: always()
@@ -115,6 +140,8 @@ jobs:
           name: pagepocket-build
           path: |
             launch-library.png
+            rendered-welcome.png
+            applog.txt
             build.log
             simulator.log
           if-no-files-found: warn

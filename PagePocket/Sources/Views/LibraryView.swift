@@ -12,6 +12,9 @@ struct LibraryView: View {
     @State private var documentToRename: Document?
     @State private var renameText = ""
 
+    /// Drives a programmatic push, used only by the automation hook below.
+    @State private var autoOpenDocument: Document?
+
     var body: some View {
         NavigationStack {
             Group {
@@ -24,6 +27,10 @@ struct LibraryView: View {
             .navigationTitle("PagePocket")
             .searchable(text: $searchText, prompt: "Search documents")
             .toolbar { toolbarContent }
+            .navigationDestination(item: $autoOpenDocument) { document in
+                DocumentBrowserView(document: document)
+            }
+            .onAppear { performAutoOpenIfRequested() }
             .sheet(isPresented: $isShowingPicker) {
                 DocumentPicker { urls in
                     Task { await store.importPicks(urls) }
@@ -142,6 +149,32 @@ struct LibraryView: View {
                 Label("Import", systemImage: "plus")
             }
         }
+    }
+
+    // MARK: - Automation hook
+
+    /// Opens a document automatically when launched with `-AutoOpenDocument <name>`.
+    ///
+    /// Debug-only. It exists so an automated test can drive the app straight to
+    /// a rendered page (and screenshot it) without simulating taps through the
+    /// file picker, which cannot be scripted.
+    private func performAutoOpenIfRequested() {
+        #if DEBUG
+        let defaults = UserDefaults.standard
+        guard let wanted = defaults.string(forKey: "AutoOpenDocument"), !wanted.isEmpty else { return }
+        // Consume it so a normal relaunch behaves normally.
+        defaults.removeObject(forKey: "AutoOpenDocument")
+
+        guard let match = store.documents.first(where: {
+            $0.displayTitle.localizedCaseInsensitiveContains(wanted)
+                || $0.originalFileName.localizedCaseInsensitiveContains(wanted)
+        }) else {
+            print("[PagePocket] AutoOpenDocument: no document matching “\(wanted)”")
+            return
+        }
+        print("[PagePocket] AutoOpenDocument: opening “\(match.displayTitle)”")
+        autoOpenDocument = match
+        #endif
     }
 
     // MARK: - Bindings

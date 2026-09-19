@@ -86,11 +86,29 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 
-	<!-- Loops back to our own in-process web server on 127.0.0.1 only. -->
+	<!-- Loops back to our own in-process web server on 127.0.0.1 only.
+	     From iOS 17, App Transport Security no longer exempts raw IP
+	     addresses, so loopback needs an explicit exception domain as well as
+	     the local-networking allowance. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>127.0.0.1</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 
 	<key>ITSAppUsesNonExemptEncryption</key>
