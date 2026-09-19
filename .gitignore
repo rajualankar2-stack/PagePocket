@@ -20,3 +20,8 @@ rendered-welcome.png
 *.xcresult
 test-summary.json
 applog.txt
+
+# Local build/test artifacts
+local-build/
+device-build/
+*.xcresult

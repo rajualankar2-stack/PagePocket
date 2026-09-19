@@ -152,13 +152,17 @@ final class WebEngine: NSObject, ObservableObject {
     private var titleObservation: NSKeyValueObservation?
 
     private func observeProgress() {
-        progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { webView, _ in
+        // `self` is captured weakly in the *outer* closure as well as the inner
+        // task. NSKeyValueObservation retains its closure, and the observation
+        // is stored on `self`, so a strong capture here would form a cycle
+        // (self → observation → closure → self) and leak the whole engine.
+        progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] webView, _ in
             let value = webView.estimatedProgress
-            Task { @MainActor [weak self] in self?.progress = value }
+            Task { @MainActor in self?.progress = value }
         }
-        titleObservation = webView.observe(\.title, options: [.new]) { webView, _ in
+        titleObservation = webView.observe(\.title, options: [.new]) { [weak self] webView, _ in
             let value = webView.title ?? ""
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 guard let self, !value.isEmpty else { return }
                 self.pageTitle = value
             }

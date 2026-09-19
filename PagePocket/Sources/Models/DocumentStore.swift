@@ -38,6 +38,7 @@ final class DocumentStore: ObservableObject {
         createDirectoriesIfNeeded()
         load()
         seedSampleDocumentsIfFirstLaunch()
+        adoptLooseFiles()
     }
 
     private func createDirectoriesIfNeeded() {
@@ -332,10 +333,89 @@ final class DocumentStore: ObservableObject {
         }
     }
 
+    // MARK: - Adopting files added outside the app
+
+    /// Imports anything sitting loose in `Documents/` that the library does not
+    /// know about yet.
+    ///
+    /// The Documents folder is user-visible in the Files app
+    /// (`UIFileSharingEnabled`), so people can drop `.html` files and folders in
+    /// directly — or sync them via iCloud Drive. Without this, those files would
+    /// sit there invisibly, because the library is driven by its own index.
+    ///
+    /// Items already owned by a document are skipped, so this only ever picks up
+    /// genuinely new arrivals.
+    func adoptLooseFiles() {
+        let knownFolders = Set(documents.map(\.storedFolderName))
+        let contents: [URL]
+        do {
+            contents = try fileManager.contentsOfDirectory(
+                at: Self.documentsRoot,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            Log.library.error("Could not scan Documents: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+
+        for item in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            // Skip the folders this app already manages.
+            if knownFolders.contains(item.lastPathComponent) { continue }
+            // Skip the app's own metadata if it ever lands here.
+            if item.lastPathComponent.hasPrefix(".") { continue }
+
+            let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            let ext = item.pathExtension.lowercased()
+
+            if isDirectory {
+                // A dropped folder becomes a document in place — no copy needed,
+                // since it already lives in our Documents directory.
+                guard let entry = try? Self.findEntryFile(in: item),
+                      let document = try? registerExistingFolder(item, entry: entry) else { continue }
+                Log.library.notice("Adopted folder “\(document.displayTitle, privacy: .public)” from Documents.")
+            } else if ["html", "htm", "xhtml", "zip"].contains(ext) {
+                // A loose file is copied into its own document folder, then the
+                // original is removed so it is not adopted again on next launch.
+                Task { @MainActor in
+                    do {
+                        let document = try await importItem(at: item)
+                        try? fileManager.removeItem(at: item)
+                        Log.library.notice("Adopted file “\(document.displayTitle, privacy: .public)” from Documents.")
+                    } catch {
+                        Log.library.error("Could not adopt \(item.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Registers a folder that is already inside `Documents/` without copying it.
+    private func registerExistingFolder(_ folder: URL, entry: URL) throws -> Document {
+        let stats = Self.measure(folder: folder)
+        var title = entry.deletingPathExtension().lastPathComponent
+        if title.lowercased() == "index" { title = folder.lastPathComponent }
+
+        let document = Document(
+            title: title,
+            storedFolderName: folder.lastPathComponent,
+            entryRelativePath: Self.relativePath(of: entry, in: folder),
+            originalFileName: folder.lastPathComponent,
+            contentSummary: stats
+        )
+        documents.insert(document, at: 0)
+        save()
+        return document
+    }
+
     // MARK: - Static helpers
 
+    // These are pure filesystem helpers with no shared mutable state, so they
+    // are deliberately nonisolated: the importer, the ZIP path and tests can all
+    // call them from any context.
+
     /// Finds the file a folder should open by default.
-    static func findEntryFile(in folder: URL) throws -> URL? {
+    nonisolated static func findEntryFile(in folder: URL) throws -> URL? {
         let fm = FileManager.default
         var htmlFiles: [URL] = []
 
@@ -370,7 +450,7 @@ final class DocumentStore: ObservableObject {
         return sorted.first
     }
 
-    static func relativePath(of url: URL, in root: URL) -> String {
+    nonisolated static func relativePath(of url: URL, in root: URL) -> String {
         let rootPath = root.standardizedFileURL.path
         let filePath = url.standardizedFileURL.path
         guard filePath.hasPrefix(rootPath) else { return url.lastPathComponent }
@@ -380,7 +460,7 @@ final class DocumentStore: ObservableObject {
     }
 
     /// "12 files · 240 KB"
-    static func measure(folder: URL) -> String {
+    nonisolated static func measure(folder: URL) -> String {
         let fm = FileManager.default
         var fileCount = 0
         var totalBytes: Int64 = 0

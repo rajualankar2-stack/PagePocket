@@ -31,6 +31,13 @@ struct LibraryView: View {
                 DocumentBrowserView(document: document)
             }
             .onAppear { performAutoOpenIfRequested() }
+            // The Documents folder is visible in the Files app, so files can
+            // arrive while the app is backgrounded. Re-scan when it comes back.
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIApplication.willEnterForegroundNotification)
+            ) { _ in
+                store.adoptLooseFiles()
+            }
             .sheet(isPresented: $isShowingPicker) {
                 DocumentPicker { urls in
                     Task { await store.importPicks(urls) }

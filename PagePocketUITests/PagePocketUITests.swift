@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// End-to-end tests that prove PagePocket really renders and runs local HTML.
 ///
@@ -191,6 +192,117 @@ final class PagePocketUITests: XCTestCase {
             Saw: \(visibleWebText(webView))
             """
         )
+    }
+
+    /// Web Workers are blocked under file://, so running one proves the page has
+    /// a proper origin — and that the worker script is served correctly.
+    func testWebWorkerRuns() throws {
+        let app = launchApp(opening: "Playground")
+        let webView = awaitWebView(app)
+
+        let runButton = webView.buttons["Run worker"]
+        XCTAssertTrue(
+            runButton.waitForExistence(timeout: 45),
+            "The worker button should be present. Saw: \(visibleWebText(webView))"
+        )
+        runButton.tap()
+
+        // The worker counts primes below 300,000 and reports the total, so this
+        // text only appears if the worker actually executed to completion.
+        XCTAssertTrue(
+            waitForWebText("Worker finished", in: webView, timeout: 60),
+            """
+            The Web Worker should run to completion. Saw: \(visibleWebText(webView))
+            """
+        )
+        XCTAssertTrue(
+            waitForWebText("largest", in: webView, timeout: 20),
+            "The worker should report its result. Saw: \(visibleWebText(webView))"
+        )
+    }
+
+    /// The canvas is drawn by the imported render module. Scrolling to it and
+    /// sampling pixels is the only way to prove it actually painted, since a
+    /// canvas exposes no accessibility text.
+    func testCanvasRendersVisiblePixels() throws {
+        let app = launchApp(opening: "Playground")
+        let webView = awaitWebView(app)
+
+        XCTAssertTrue(
+            waitForWebText("Canvas animation", in: webView, timeout: 45),
+            "The canvas section should exist. Saw: \(visibleWebText(webView))"
+        )
+
+        // Bring the canvas into view.
+        webView.swipeUp()
+        webView.swipeUp()
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = "playground-canvas"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        // Assert on the pixels: a rendered canvas contains far more distinct
+        // colours than the flat panel background around it.
+        let image = screenshot.image
+        XCTAssertGreaterThan(image.size.width, 0, "Screenshot should have content.")
+
+        // Sample the centre band of the screen, where the canvas now sits.
+        let distinctColours = Self.countDistinctColours(in: image, verticalRange: 0.30...0.75)
+        XCTAssertGreaterThan(
+            distinctColours, 40,
+            """
+            The canvas should have painted a multi-colour rose curve. Only \
+            \(distinctColours) distinct colours were found, which suggests the \
+            canvas is blank.
+            """
+        )
+    }
+
+    /// Counts unique colours in a horizontal band of a screenshot.
+    private static func countDistinctColours(
+        in image: UIImage,
+        verticalRange: ClosedRange<Double>
+    ) -> Int {
+        guard let cgImage = image.cgImage else { return 0 }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        let y0 = Int(Double(height) * verticalRange.lowerBound)
+        let y1 = Int(Double(height) * verticalRange.upperBound)
+        let bandHeight = max(1, y1 - y0)
+
+        // Downsample to keep this fast: one pixel every few, across the band.
+        let sampleWidth = min(width, 200)
+        let sampleHeight = min(bandHeight, 200)
+
+        var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
+        guard let context = CGContext(
+            data: &pixels,
+            width: sampleWidth,
+            height: sampleHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: sampleWidth * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return 0 }
+
+        // Crop the band and draw it scaled down into the sample buffer.
+        guard let band = cgImage.cropping(to: CGRect(x: 0, y: y0, width: width, height: bandHeight)) else {
+            return 0
+        }
+        context.draw(band, in: CGRect(x: 0, y: 0, width: sampleWidth, height: sampleHeight))
+
+        var seen = Set<UInt32>()
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            let r = UInt32(pixels[index])
+            let g = UInt32(pixels[index + 1])
+            let b = UInt32(pixels[index + 2])
+            seen.insert((r << 16) | (g << 8) | b)
+        }
+        return seen.count
     }
 
     // MARK: - Chrome

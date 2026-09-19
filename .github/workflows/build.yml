@@ -126,7 +126,7 @@ jobs:
           fi
           echo "Local server bound a port and the document opened."
 
-      - name: Run UI tests
+      - name: Run unit and UI tests
         run: |
           set -o pipefail
           UDID="${{ steps.sim.outputs.udid }}"

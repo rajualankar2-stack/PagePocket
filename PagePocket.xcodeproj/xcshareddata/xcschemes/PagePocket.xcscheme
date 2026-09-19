@@ -29,6 +29,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C59CCDC0BBB9AC8738DC897F"
+               BuildableName = "PagePocketTests.xctest"
+               BlueprintName = "PagePocketTests"
+               ReferencedContainer = "container:PagePocket.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "745E98C284F31088EC3E48E7"
                BuildableName = "PagePocketUITests.xctest"
                BlueprintName = "PagePocketUITests"
@@ -53,6 +67,17 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C59CCDC0BBB9AC8738DC897F"
+               BuildableName = "PagePocketTests.xctest"
+               BlueprintName = "PagePocketTests"
+               ReferencedContainer = "container:PagePocket.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "NO">

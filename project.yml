@@ -64,12 +64,35 @@ targets:
         TEST_TARGET_NAME: PagePocket
         GENERATE_INFOPLIST_FILE: YES
 
+  PagePocketTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: PagePocketTests
+        excludes:
+          - "Fixtures"
+      # Folder reference so the .zip fixtures keep their names and are not
+      # treated as build sources.
+      - path: PagePocketTests/Fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: PagePocket
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pagepocket.app.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/PagePocket.app/PagePocket"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   PagePocket:
     build:
       targets:
         PagePocket: all
         PagePocketUITests: [test]
+        PagePocketTests: [test]
     run:
       config: Debug
       # Opens a bundled document automatically, so the app does not sit on the
@@ -79,4 +102,5 @@ schemes:
     test:
       config: Debug
       targets:
+        - PagePocketTests
         - PagePocketUITests
