@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build:
     name: Build & run on iOS Simulator
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
 
     steps:
@@ -61,18 +61,19 @@ jobs:
       - name: Boot simulator
         id: sim
         run: |
-          # Pick the newest available iPhone runtime and a matching device.
+          # Resolve a concrete device at runtime instead of hard-coding a name:
+          # available iPhone models differ between runner images.
           RUNTIME=$(xcrun simctl list runtimes --json \
-            | python3 -c "import json,sys; d=json.load(sys.stdin)['runtimes']; ios=[r for r in d if r['isAvailable'] and 'iOS' in r['name']]; ios.sort(key=lambda r: r['version'], reverse=True); print(ios[0]['identifier'])")
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['runtimes']; ios=[r for r in d if r['isAvailable'] and r['name'].startswith('iOS')]; ios.sort(key=lambda r: [int(p) for p in r['version'].split('.')], reverse=True); print(ios[0]['identifier'])")
           echo "Using runtime: $RUNTIME"
 
-          DEVICE_TYPE=$(xcrun simctl list devicetypes --json \
-            | python3 -c "import json,sys; d=json.load(sys.stdin)['devicetypes']; ip=[x for x in d if x['name'].startswith('iPhone')]; print(ip[-1]['identifier'])")
-          echo "Using device type: $DEVICE_TYPE"
+          PREFERRED=$(xcrun simctl list devicetypes --json \
+            | python3 -c "import json,sys; t=[x['identifier'] for x in json.load(sys.stdin)['devicetypes'] if x['name'].startswith('iPhone')]; p=[x for x in t if 'iPhone 17 Pro' in x] or [x for x in t if 'iPhone 17' in x] or t; print(p[0])")
+          echo "Using device type: $PREFERRED"
 
-          UDID=$(xcrun simctl create "PagePocket-Test" "$DEVICE_TYPE" "$RUNTIME")
+          UDID=$(xcrun simctl create "PagePocket-Test" "$PREFERRED" "$RUNTIME")
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$UDID"
+          # -b boots the device if needed and blocks until it is fully booted.
           xcrun simctl bootstatus "$UDID" -b
 
       - name: Install and launch app

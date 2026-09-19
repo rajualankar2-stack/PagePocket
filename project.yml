@@ -28,6 +28,12 @@ targets:
       - path: PagePocket/Resources
         excludes:
           - "Info.plist"
+          - "Samples"
+      # A folder reference, so each sample keeps its own directory instead of
+      # every file being flattened into the bundle root (which would collide on
+      # the shared index.html / style.css names).
+      - path: PagePocket/Resources/Samples
+        type: folder
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pagepocket.app
