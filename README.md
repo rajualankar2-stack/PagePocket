@@ -41,6 +41,7 @@ The listener is pinned to the loopback interface, so nothing is reachable from y
 - Open a single `.html` file, an entire **folder**, or a `.zip` bundle
 - Multiple selection in one pass
 - Files-hand-off: "Open in PagePocket" from Files, Safari, Mail, or any share sheet
+- Drop files straight into the app's Documents folder (Files app or iCloud Drive) — they are picked up automatically
 - Imported content also lives in the app's Documents folder, visible in the Files app
 
 **Interact**
@@ -106,7 +107,9 @@ If all three lights are green, local HTML is running with full web-platform fide
 
 ### Automated verification
 
-`PagePocketUITests` drives the real app in a simulator and asserts the claims above. It runs on every push:
+**39 tests, all passing** on iOS 26 and iOS 18.4 (`xcodebuild test`).
+
+`PagePocketUITests` drives the real app in a simulator and asserts the claims above:
 
 | Test | What it proves |
 |---|---|
@@ -115,11 +118,39 @@ If all three lights are green, local HTML is running with full web-platform fide
 | `testJavaScriptAndFetchWorkAgainstLocalServer` | JS executes **and** `fetch('data.json')` succeeds — impossible under `file://` |
 | `testTappingInPageUpdatesTheDOM` | Tapping a button in the page runs its JS and updates the DOM |
 | `testESModulesLoadFromLocalServer` | ES modules load, so the server sends a JS MIME type |
+| `testWebWorkerRuns` | A Web Worker computes 300,000 primes off the main thread |
+| `testCanvasRendersVisiblePixels` | The canvas paints a multi-colour curve (asserted on pixels) |
 | `testConsoleCapturesPageOutput` | Page `console.log` reaches the native console sheet |
+| `testScriptRunnerEvaluatesAgainstThePage` | The JS runner evaluates live against the page |
+| `testImmersiveModeToggles` | Full screen always offers a visible way out |
+| `testReloadKeepsTheDocumentWorking` | Reload re-serves from the local server |
+| `testPageSettingsShowsDocumentDetails` | The served loopback URL is surfaced |
+
+`PagePocketTests` covers the logic UI tests cannot reach:
+
+| Area | What it proves |
+|---|---|
+| Path traversal | `../`, `%2e%2e%2f` and `....//` cannot escape a mounted document |
+| MIME types | JavaScript is served as a JS type (ES modules depend on it) |
+| Mount teardown | After unmounting, a document's files stop being reachable |
+| ZIP extraction | Deflate **and** stored entries, nested folders, and a 4 KB binary verified by SHA-256 |
+| Entry selection | `index.html` preference, depth ordering, `__MACOSX` junk ignored |
+| Adoption | Dropped folders are adopted in place, scans are idempotent, non-HTML folders ignored |
 
 The workflow also asserts, from the app's own unified log, that the loopback server reported a listening port and that the document opened — then uploads a screenshot of the rendered page.
 
 The UI tests launch the app with a `-AutoOpenDocument <name>` argument, which exists because the iOS file picker cannot be scripted. It is compiled `#if DEBUG` only.
+
+### Bugs this testing caught
+
+Worth recording, because each one looked fine in review:
+
+1. **Full screen trapped the user.** The only exit button lived in the navigation bar — the very thing full screen hides.
+2. **Files dropped into Documents never appeared.** The library is index-driven, so `UIFileSharingEnabled` was a false promise until an adoption scan was added.
+3. **Handing a file to the app imported it twice.** `onOpenURL` copied the file but left the original where the adoption scan found it again.
+4. **A retain cycle in the KVO observers**, found only by the device-target build's stricter analysis.
+5. **`WKOpenPanelParameters` is iOS 18.4+**, not iOS 17 — a device-only compile error.
+6. **XcodeGen flattened the sample folders**, so both documents collided on `index.html` at the bundle root.
 
 ---
 
