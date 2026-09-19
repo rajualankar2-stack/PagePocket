@@ -12,3 +12,11 @@ xcuserdata/
 # CI artifacts
 *.log
 launch-library.png
+
+# CI artifacts
+*.log
+launch-library.png
+rendered-welcome.png
+*.xcresult
+test-summary.json
+applog.txt

@@ -10,6 +10,7 @@
 		06BA9A6474D4652CDC34D830 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A0D727E1B092E02561238BF /* Assets.xcassets */; };
 		27D8E5D4B8B22F72B200E7E4 /* ScriptRunnerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036FE69278F568F9DB1829C5 /* ScriptRunnerView.swift */; };
 		28DA3962B1C1B301E017E24E /* ConsoleMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF00D60FEC59268572C5E3C /* ConsoleMessage.swift */; };
+		2B736CD2100DC7F7114875AF /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B1EEF3AA53CD5CDD8D041E /* Logging.swift */; };
 		2CAFB4C3551DFEC8655D35CB /* PagePocketApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C61C370FF5D6FE862DB4A01 /* PagePocketApp.swift */; };
 		3843F7A25462CB797E39F71B /* DocumentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4F9EB37D9CB5E9D585654 /* DocumentPicker.swift */; };
 		4D346B0F3D8D43F079624661 /* DocumentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91402FE97532855D46ABF5A8 /* DocumentSession.swift */; };
@@ -19,6 +20,7 @@
 		97EBCF797AE28835250323D6 /* DocumentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A275CE4291F24B06E6057513 /* DocumentStore.swift */; };
 		A358A99A1985F4825E72A69D /* MimeTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40674A2857516D1DECB5773A /* MimeTypes.swift */; };
 		B33A7D7C1281C9095916150C /* DocumentBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E3933BE6D4DCFA948FBB2C7 /* DocumentBrowserView.swift */; };
+		B8C749F623384422F3CE8609 /* PagePocketUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CED37609A8E2B0824C62518 /* PagePocketUITests.swift */; };
 		C36CE50E1EB3EA65882CF5E1 /* ZipExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C49FDF0EFF730A3958AE422 /* ZipExtractor.swift */; };
 		C4F5364D5E0E242636EFED0E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43FCE664D508623F38693AB6 /* LibraryView.swift */; };
 		D5459E505B01AB23DCFDE5B2 /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 0911199C2196750F93CE4784 /* Samples */; };
@@ -27,14 +29,26 @@
 		F4CF244330BF1B65688E7F8B /* WebEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2E099F8D19EA015E5F0139 /* WebEngine.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E83BB3F26E432A8465F610B3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DB14848FB5A5B4C8F1729F5F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7A6E8A00C34A7297882872F8;
+			remoteInfo = PagePocket;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		01F0E6F571377B74FC2342E0 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		036FE69278F568F9DB1829C5 /* ScriptRunnerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptRunnerView.swift; sourceTree = "<group>"; };
 		0911199C2196750F93CE4784 /* Samples */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Samples; path = PagePocket/Resources/Samples; sourceTree = SOURCE_ROOT; };
 		0B2E099F8D19EA015E5F0139 /* WebEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebEngine.swift; sourceTree = "<group>"; };
 		0BF00D60FEC59268572C5E3C /* ConsoleMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleMessage.swift; sourceTree = "<group>"; };
+		12A863D54B83F324C5B31773 /* PagePocketUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PagePocketUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C7532B23CB5CD01BB447F98 /* ConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleView.swift; sourceTree = "<group>"; };
 		2E3933BE6D4DCFA948FBB2C7 /* DocumentBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentBrowserView.swift; sourceTree = "<group>"; };
+		37B1EEF3AA53CD5CDD8D041E /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 		37DB6D05471BDB3A7907E57C /* LocalHTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalHTTPServer.swift; sourceTree = "<group>"; };
 		40674A2857516D1DECB5773A /* MimeTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimeTypes.swift; sourceTree = "<group>"; };
 		43FCE664D508623F38693AB6 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -43,6 +57,7 @@
 		6D57D162790D7D3FAF8E35FE /* PageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageSettingsView.swift; sourceTree = "<group>"; };
 		7A0D727E1B092E02561238BF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7C49FDF0EFF730A3958AE422 /* ZipExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipExtractor.swift; sourceTree = "<group>"; };
+		8CED37609A8E2B0824C62518 /* PagePocketUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PagePocketUITests.swift; sourceTree = "<group>"; };
 		91402FE97532855D46ABF5A8 /* DocumentSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSession.swift; sourceTree = "<group>"; };
 		9888E724E5207AEC0AB83862 /* TemporaryFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryFiles.swift; sourceTree = "<group>"; };
 		A275CE4291F24B06E6057513 /* DocumentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStore.swift; sourceTree = "<group>"; };
@@ -91,6 +106,14 @@
 			path = Web;
 			sourceTree = "<group>";
 		};
+		B8A849E08D4D350A4DDC6966 /* PagePocketUITests */ = {
+			isa = PBXGroup;
+			children = (
+				8CED37609A8E2B0824C62518 /* PagePocketUITests.swift */,
+			);
+			path = PagePocketUITests;
+			sourceTree = "<group>";
+		};
 		C42757A261E653DE13E4E0C3 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -106,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				1081E814A0F77BADC2F81495 /* PagePocket */,
+				B8A849E08D4D350A4DDC6966 /* PagePocketUITests */,
 				E8F1634AB359F9178D1D64FC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -113,6 +137,7 @@
 		DB5ED5E44D43107E2564A5E1 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				37B1EEF3AA53CD5CDD8D041E /* Logging.swift */,
 				9888E724E5207AEC0AB83862 /* TemporaryFiles.swift */,
 			);
 			path = Utils;
@@ -122,6 +147,7 @@
 			isa = PBXGroup;
 			children = (
 				B5EFACD6471F489DCDAB9268 /* PagePocket.app */,
+				12A863D54B83F324C5B31773 /* PagePocketUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -142,6 +168,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		745E98C284F31088EC3E48E7 /* PagePocketUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A79549E9BC3ADFC4AFA35E72 /* Build configuration list for PBXNativeTarget "PagePocketUITests" */;
+			buildPhases = (
+				816DA0C512C4C2CAE712FE71 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AEB4BB64A742DCC55AECA99F /* PBXTargetDependency */,
+			);
+			name = PagePocketUITests;
+			packageProductDependencies = (
+			);
+			productName = PagePocketUITests;
+			productReference = 12A863D54B83F324C5B31773 /* PagePocketUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		7A6E8A00C34A7297882872F8 /* PagePocket */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B9B64763A1DFBD1515927016 /* Build configuration list for PBXNativeTarget "PagePocket" */;
@@ -169,6 +213,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					745E98C284F31088EC3E48E7 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 7A6E8A00C34A7297882872F8;
+					};
 					7A6E8A00C34A7297882872F8 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -190,6 +239,7 @@
 			projectRoot = "";
 			targets = (
 				7A6E8A00C34A7297882872F8 /* PagePocket */,
+				745E98C284F31088EC3E48E7 /* PagePocketUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -220,6 +270,7 @@
 				97EBCF797AE28835250323D6 /* DocumentStore.swift in Sources */,
 				C4F5364D5E0E242636EFED0E /* LibraryView.swift in Sources */,
 				93B347366F24A5E75EF95830 /* LocalHTTPServer.swift in Sources */,
+				2B736CD2100DC7F7114875AF /* Logging.swift in Sources */,
 				A358A99A1985F4825E72A69D /* MimeTypes.swift in Sources */,
 				2CAFB4C3551DFEC8655D35CB /* PagePocketApp.swift in Sources */,
 				D6C47F755FAB2233D853AAE3 /* PageSettingsView.swift in Sources */,
@@ -230,9 +281,43 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		816DA0C512C4C2CAE712FE71 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B8C749F623384422F3CE8609 /* PagePocketUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		AEB4BB64A742DCC55AECA99F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7A6E8A00C34A7297882872F8 /* PagePocket */;
+			targetProxy = E83BB3F26E432A8465F610B3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		0A02A18569F728FC7280A633 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pagepocket.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = PagePocket;
+			};
+			name = Release;
+		};
 		3B9846CA40A6141DBFEEBC88 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -418,6 +503,24 @@
 			};
 			name = Release;
 		};
+		E3C23390F2ACDB9850093BE9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pagepocket.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = PagePocket;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -426,6 +529,15 @@
 			buildConfigurations = (
 				6D3C37F997A7824E8E0E7A31 /* Debug */,
 				80EBD0D1A03E1037DDDF38A1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A79549E9BC3ADFC4AFA35E72 /* Build configuration list for PBXNativeTarget "PagePocketUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E3C23390F2ACDB9850093BE9 /* Debug */,
+				0A02A18569F728FC7280A633 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -169,10 +169,10 @@ struct LibraryView: View {
             $0.displayTitle.localizedCaseInsensitiveContains(wanted)
                 || $0.originalFileName.localizedCaseInsensitiveContains(wanted)
         }) else {
-            print("[PagePocket] AutoOpenDocument: no document matching “\(wanted)”")
+            Log.app.error("AutoOpenDocument: no document matching “\(wanted, privacy: .public)”")
             return
         }
-        print("[PagePocket] AutoOpenDocument: opening “\(match.displayTitle)”")
+        Log.app.notice("AutoOpenDocument: opening “\(match.displayTitle, privacy: .public)”")
         autoOpenDocument = match
         #endif
     }

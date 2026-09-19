@@ -125,11 +125,15 @@ struct DocumentBrowserView: View {
                 Image(systemName: "chevron.backward")
             }
             .disabled(!session.engine.canGoBack)
+            .accessibilityLabel("Back")
+            .accessibilityIdentifier("browser.back")
 
             Button { session.engine.goForward() } label: {
                 Image(systemName: "chevron.forward")
             }
             .disabled(!session.engine.canGoForward)
+            .accessibilityLabel("Forward")
+            .accessibilityIdentifier("browser.forward")
 
             Button {
                 if session.engine.isLoading { session.engine.stopLoading() }
@@ -137,6 +141,8 @@ struct DocumentBrowserView: View {
             } label: {
                 Image(systemName: session.engine.isLoading ? "xmark" : "arrow.clockwise")
             }
+            .accessibilityLabel(session.engine.isLoading ? "Stop" : "Reload")
+            .accessibilityIdentifier("browser.reload")
 
             Button { isShowingConsole = true } label: {
                 Image(systemName: "terminal")
@@ -149,11 +155,14 @@ struct DocumentBrowserView: View {
                         }
                     }
             }
+            .accessibilityLabel("Console")
+            .accessibilityIdentifier("browser.console")
 
             Button { isImmersive = true } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
             .accessibilityLabel("Full screen")
+            .accessibilityIdentifier("browser.fullscreen")
         }
         .font(.system(size: 19, weight: .medium))
         .padding(.horizontal, 22)

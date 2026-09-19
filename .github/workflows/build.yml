@@ -108,7 +108,7 @@ jobs:
           UDID="${{ steps.sim.outputs.udid }}"
           xcrun simctl spawn "$UDID" log show \
             --last 3m \
-            --predicate 'process == "PagePocket"' \
+            --predicate 'subsystem == "com.pagepocket.app"' \
             --style compact 2>/dev/null > applog.txt || true
 
           echo "--- local server line ---"
@@ -116,7 +116,7 @@ jobs:
           echo "--- AutoOpenDocument line ---"
           grep -i "AutoOpenDocument" applog.txt || echo "(not found)"
 
-          if ! grep -qi "local server listening" applog.txt; then
+          if ! grep -qi "Local server listening" applog.txt; then
             echo "::error::The loopback HTTP server never reported a listening port."
             exit 1
           fi
@@ -125,6 +125,31 @@ jobs:
             exit 1
           fi
           echo "Local server bound a port and the document opened."
+
+      - name: Run UI tests
+        run: |
+          set -o pipefail
+          UDID="${{ steps.sim.outputs.udid }}"
+          xcodebuild test \
+            -project PagePocket.xcodeproj \
+            -scheme PagePocket \
+            -configuration Debug \
+            -destination "id=$UDID" \
+            -derivedDataPath build \
+            -resultBundlePath test-results.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee test.log | tail -60
+
+      - name: Summarise test results
+        if: always()
+        run: |
+          if [ -d test-results.xcresult ]; then
+            xcrun xcresulttool get test-results summary \
+              --path test-results.xcresult > test-summary.json 2>/dev/null \
+              && cat test-summary.json || echo "(summary unavailable)"
+          fi
 
       - name: Collect simulator logs
         if: always()
@@ -143,6 +168,8 @@ jobs:
             rendered-welcome.png
             applog.txt
             build.log
+            test.log
+            test-summary.json
             simulator.log
           if-no-files-found: warn
           retention-days: 14

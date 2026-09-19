@@ -27,12 +27,13 @@ final class AppModel: ObservableObject {
             let port = try server.start()
             isServerRunning = true
             serverError = nil
-            #if DEBUG
-            print("[PagePocket] local server listening on http://127.0.0.1:\(port)/")
-            #endif
+            // Logged unconditionally: this line is what automated verification
+            // checks to confirm the loopback server came up.
+            Log.server.notice("Local server listening on http://127.0.0.1:\(port)/")
         } catch {
             isServerRunning = false
             serverError = error.localizedDescription
+            Log.server.error("Local server failed to start: \(error.localizedDescription, privacy: .public)")
         }
     }
 

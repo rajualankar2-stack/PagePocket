@@ -49,3 +49,34 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         SWIFT_EMIT_LOC_STRINGS: YES
+
+  PagePocketUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: PagePocketUITests
+    dependencies:
+      - target: PagePocket
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pagepocket.app.uitests
+        TEST_TARGET_NAME: PagePocket
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  PagePocket:
+    build:
+      targets:
+        PagePocket: all
+        PagePocketUITests: [test]
+    run:
+      config: Debug
+      # Opens a bundled document automatically, so the app does not sit on the
+      # library screen when run from Xcode.
+      commandLineArguments:
+        "-AutoOpenDocument": "Welcome"
+    test:
+      config: Debug
+      targets:
+        - PagePocketUITests
