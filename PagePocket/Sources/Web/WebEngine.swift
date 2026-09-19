@@ -507,7 +507,11 @@ extension WebEngine: WKUIDelegate {
 
     /// Handles `<input type="file">`.
     ///
-    /// Without this, the file input does nothing at all on iOS.
+    /// Availability note: WebKit only exposed this delegate method to iOS in
+    /// 18.4. On iOS 17 the file input has no native picker to route through, so
+    /// it stays inert — everything else about the page works normally. The
+    /// deployment target is 17.0 so that older devices still get the viewer.
+    @available(iOS 18.4, *)
     nonisolated func webView(_ webView: WKWebView,
                              runOpenPanelWith parameters: WKOpenPanelParameters,
                              initiatedByFrame frame: WKFrameInfo,
