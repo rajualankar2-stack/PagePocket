@@ -468,3 +468,75 @@ final class EntryFileSelectionTests: XCTestCase {
         XCTAssertTrue(summary.contains("KB") || summary.contains("bytes"), "Got: \(summary)")
     }
 }
+
+// MARK: - Loose file adoption
+
+/// Covers the "files placed in Documents" path, which is what makes the app's
+/// `UIFileSharingEnabled` promise real: anything the user drops into the
+/// Documents folder (via the Files app or iCloud Drive) must show up.
+///
+/// Main-actor bound because `DocumentStore` is.
+@MainActor
+final class LooseFileAdoptionTests: XCTestCase {
+
+    /// The adoption scan must not re-import folders the library already manages,
+    /// or every launch would duplicate the whole library.
+    func testAdoptionIgnoresKnownFolders() throws {
+        let store = DocumentStore()
+        let baseline = store.documents.count
+
+        // Running the scan repeatedly must be idempotent.
+        store.adoptLooseFiles()
+        store.adoptLooseFiles()
+
+        XCTAssertEqual(
+            store.documents.count, baseline,
+            "Repeated adoption scans must not create duplicate documents."
+        )
+    }
+
+    /// A folder dropped into Documents is adopted in place, without being copied.
+    func testAdoptionPicksUpDroppedFolder() throws {
+        let store = DocumentStore()
+        let baseline = store.documents.count
+
+        let dropped = DocumentStore.documentsRoot
+            .appendingPathComponent("DroppedFolder-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dropped, withIntermediateDirectories: true)
+        try "<html><body>dropped</body></html>".write(
+            to: dropped.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: dropped) }
+
+        store.adoptLooseFiles()
+
+        XCTAssertEqual(store.documents.count, baseline + 1,
+                       "The dropped folder should be adopted as a document.")
+
+        let adopted = try XCTUnwrap(store.documents.first { $0.storedFolderName == dropped.lastPathComponent },
+                                    "The dropped folder should appear in the library by its own name.")
+        XCTAssertEqual(adopted.entryRelativePath, "index.html")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: adopted.entryURL.path))
+
+        // In-place adoption: the original must not have been duplicated.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dropped.appendingPathComponent("index.html").path),
+                      "Adopting in place should leave the original folder intact.")
+    }
+
+    /// A folder with no HTML in it is not a document and must be ignored.
+    func testAdoptionIgnoresFolderWithoutHTML() throws {
+        let store = DocumentStore()
+        let baseline = store.documents.count
+
+        let notADocument = DocumentStore.documentsRoot
+            .appendingPathComponent("NoHTML-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: notADocument, withIntermediateDirectories: true)
+        try "just text".write(to: notADocument.appendingPathComponent("notes.txt"),
+                              atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: notADocument) }
+
+        store.adoptLooseFiles()
+
+        XCTAssertEqual(store.documents.count, baseline,
+                       "A folder without HTML should not become a document.")
+    }
+}

@@ -45,7 +45,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Handles a file handed to us by another app.
+    /// Handles a file handed to us by another app or the Files app.
     ///
     /// The URL is security-scoped for the duration of this call only, so the
     /// file is copied into the library immediately rather than referenced later.
@@ -53,11 +53,28 @@ final class AppModel: ObservableObject {
         let needsScope = url.startAccessingSecurityScopedResource()
         defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
 
+        // A document handed over from our own Documents directory (which happens
+        // when the system routes an in-place "Open in PagePocket" back to us) is
+        // already where adoptLooseFiles looks, so importing it here as well
+        // would produce two copies of the same document.
+        if url.isFileURL, Self.isInsideDocuments(url) {
+            Log.library.notice("Incoming file already in Documents; letting the library adopt it.")
+            store.adoptLooseFiles()
+            return
+        }
+
         do {
             _ = try await store.importItem(at: url)
         } catch {
             store.lastError = error.localizedDescription
         }
+    }
+
+    /// Whether a URL points inside the app's own Documents directory.
+    private static func isInsideDocuments(_ url: URL) -> Bool {
+        let documents = DocumentStore.documentsRoot.standardizedFileURL.path
+        let candidate = url.standardizedFileURL.path
+        return candidate == documents || candidate.hasPrefix(documents + "/")
     }
 }
 
