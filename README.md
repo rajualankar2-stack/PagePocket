@@ -104,6 +104,23 @@ If all three lights are green, local HTML is running with full web-platform fide
 
 > Both of these fail in a plain `file://` viewer. That is the whole point.
 
+### Automated verification
+
+`PagePocketUITests` drives the real app in a simulator and asserts the claims above. It runs on every push:
+
+| Test | What it proves |
+|---|---|
+| `testLibraryImportsBundledSamples` | Both samples are found and imported on first launch |
+| `testDocumentRendersHTML` | The document's own markup renders in the web view |
+| `testJavaScriptAndFetchWorkAgainstLocalServer` | JS executes **and** `fetch('data.json')` succeeds — impossible under `file://` |
+| `testTappingInPageUpdatesTheDOM` | Tapping a button in the page runs its JS and updates the DOM |
+| `testESModulesLoadFromLocalServer` | ES modules load, so the server sends a JS MIME type |
+| `testConsoleCapturesPageOutput` | Page `console.log` reaches the native console sheet |
+
+The workflow also asserts, from the app's own unified log, that the loopback server reported a listening port and that the document opened — then uploads a screenshot of the rendered page.
+
+The UI tests launch the app with a `-AutoOpenDocument <name>` argument, which exists because the iOS file picker cannot be scripted. It is compiled `#if DEBUG` only.
+
 ---
 
 ## Architecture
@@ -128,9 +145,13 @@ PagePocket/
 │   │   ├── ScriptRunnerView.swift  Live JS evaluation
 │   │   ├── PageSettingsView.swift  Per-page controls
 │   │   └── DocumentPicker.swift    UIDocumentPicker bridges
+│   ├── Utils/
+│   │   ├── Logging.swift           os.Logger categories
+│   │   └── TemporaryFiles.swift    Scratch space for screenshots
 │   └── PagePocketApp.swift         App entry, shared services
+├── PagePocketUITests/              End-to-end rendering + interaction tests
 └── Resources/
-    ├── Info.plist                  Document types, Files-app visibility
+    ├── Info.plist                  Document types, Files-app visibility, ATS
     ├── Assets.xcassets             App icon + colours
     └── Samples/                    Welcome + Playground demo documents
 ```
