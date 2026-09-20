@@ -80,8 +80,27 @@ open PagePocket.xcodeproj
 
 Then in Xcode: select the **PagePocket** scheme → your iPhone → **Run**.
 
-To install on a physical device you need to set your own signing team:
-**Target → Signing & Capabilities → Team**. (Bundle ID `com.pagepocket.app` must be unique — change it if Xcode complains.)
+**To run on a physical iPhone** you need a free Apple ID added to Xcode:
+
+1. **Xcode → Settings → Accounts → +** and sign in with your Apple ID.
+2. Select the project → **Signing & Capabilities** → tick **Automatically manage signing** → choose your **Personal Team**.
+3. If Xcode reports a bundle-ID conflict, change `PRODUCT_BUNDLE_IDENTIFIER` to something unique (e.g. `com.yourname.pagepocket`) in `project.yml`, then re-run `xcodegen generate`.
+
+A free Apple ID signs apps that expire after 7 days; a paid Developer account gives 1 year. Neither is required to build for the simulator.
+
+> Note: this Mac has no Apple ID configured in Xcode and only a self-signed
+> macOS identity (`ClipVault Local Signing`), which **cannot** sign iOS apps.
+> An Apple ID has to be added in Xcode before a device build will work.
+
+#### Connecting your iPhone
+
+Wired is the reliable option:
+
+1. Connect the iPhone by USB, unlock it, and tap **Trust This Computer**.
+2. On the iPhone: **Settings → Privacy & Security → Developer Mode → On**, then restart the phone. (Required since iOS 16, and the menu only appears after the device has been connected to Xcode once.)
+3. The device appears in Xcode's destination menu. Unplugging after the first successful run is fine — Xcode can deploy over Wi-Fi afterwards if you enable **Connect via network** in **Window → Devices and Simulators**.
+
+If the device does not appear, check `xcrun devicectl list devices` — it lists only genuinely connected hardware.
 
 ### Option B — just build it in CI
 
@@ -107,7 +126,19 @@ If all three lights are green, local HTML is running with full web-platform fide
 
 ### Automated verification
 
-**39 tests, all passing** on iOS 26 and iOS 18.4 (`xcodebuild test`).
+**39 tests, all passing**, verified on every device class the app targets:
+
+| Device | OS | Layout class | Result |
+|---|---|---|---|
+| iPhone 14 Plus | iOS 18.4 | Notch, 6.7" | 39/39 |
+| iPhone 14 Plus | iOS 27.0 | Notch, 6.7" | 39/39 |
+| iPhone 16 Pro | iOS 18.4 | Dynamic Island | 39/39 |
+| iPhone 17 Pro | iOS 26.5 | Dynamic Island | 39/39 |
+| iPad Pro 13" (M5) | iOS 27.0 | Tablet | 39/39 |
+
+Safe-area handling is checked on the notched device too: the status bar renders
+either side of the notch, with **zero pixels of content underneath it**, in both
+normal and full-screen modes.
 
 `PagePocketUITests` drives the real app in a simulator and asserts the claims above:
 
