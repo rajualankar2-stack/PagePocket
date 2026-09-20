@@ -40,9 +40,22 @@ The listener is pinned to the loopback interface, so nothing is reachable from y
 **Import**
 - Open a single `.html` file, an entire **folder**, or a `.zip` bundle
 - Multiple selection in one pass
-- Files-hand-off: "Open in PagePocket" from Files, Safari, Mail, or any share sheet
+- **Share to PagePocket** from the Files app, Safari, Mail or any share sheet
 - Drop files straight into the app's Documents folder (Files app or iCloud Drive) — they are picked up automatically
 - Imported content also lives in the app's Documents folder, visible in the Files app
+
+**Handling HTML files**
+
+PagePocket declares itself the **owner** of `public.html`, `public.xhtml` and ZIP archives, which is what lets iOS offer it as the app for those types.
+
+To make it the default for HTML on iOS 26+:
+
+1. In the Files app, long-press an `.html` file → **Get Info**
+2. Tap the menu next to **Always Open With** → choose **PagePocket**
+
+There is no global per-extension default switch on iOS; the choice is made per file type through that menu, and iOS remembers it.
+
+> Note: iOS never lets a third-party app be made the system default for *all* HTML, the way a browser can be set as the default for web links. `LSHandlerRank: Owner` makes PagePocket the preferred handler and makes it appear in Open With / Always Open With, but Apple reserves the final choice for the user.
 
 **Interact**
 - Full JavaScript, CSS, canvas, WebGL and media playback
@@ -126,7 +139,7 @@ If all three lights are green, local HTML is running with full web-platform fide
 
 ### Automated verification
 
-**39 tests, all passing**, verified on every device class the app targets:
+**44 tests, all passing**, verified on every device class the app targets:
 
 | Device | OS | Layout class | Result |
 |---|---|---|---|
@@ -211,6 +224,9 @@ PagePocket/
 │   │   ├── Logging.swift           os.Logger categories
 │   │   └── TemporaryFiles.swift    Scratch space for screenshots
 │   └── PagePocketApp.swift         App entry, shared services
+├── Shared/
+│   └── SharedInbox.swift           App Group staging, compiled into both targets
+├── PagePocketShare/                Share Extension (receives shared HTML)
 ├── PagePocketUITests/              End-to-end rendering + interaction tests
 └── Resources/
     ├── Info.plist                  Document types, Files-app visibility, ATS
