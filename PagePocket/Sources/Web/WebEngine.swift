@@ -65,14 +65,28 @@ final class WebEngine: NSObject, ObservableObject {
         preferences.allowsContentJavaScript = true
         configuration.defaultWebpagePreferences = preferences
 
+        // Install the console bridge BEFORE the web view is created.
+        //
+        // `WKWebView.init(frame:configuration:)` *copies* the configuration, so
+        // anything added to the local `configuration` afterwards never reaches
+        // the live web view — the handler and user script would be registered on
+        // a thrown-away object, and the page's console output would be lost.
+        // The proxy breaks the retain cycle that `add(_:name:)` would otherwise
+        // create between the content controller and this engine.
+        //
+        // The proxy is created first because it needs `self`, which is legal
+        // before `super.init()` only for capturing — not for member access.
+        let proxy = ConsoleMessageProxy()
+        configuration.userContentController.add(proxy, name: consoleHandlerName)
+        configuration.userContentController.addUserScript(Self.consoleBridgeScript)
+
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
 
-        // Install the console bridge. The proxy breaks the retain cycle that
-        // `add(_:name:)` would otherwise create between controller and engine.
-        let proxy = ConsoleMessageProxy(target: self)
-        configuration.userContentController.add(proxy, name: consoleHandlerName)
-        configuration.userContentController.addUserScript(Self.consoleBridgeScript)
+        // Now that `self` is fully initialised, point the proxy at it. The
+        // handler is registered on the *live* controller, which is the copy the
+        // web view actually uses.
+        proxy.target = self
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -344,10 +358,12 @@ final class WebEngine: NSObject, ObservableObject {
 /// WebKit callback can safely re-enter the main actor.
 private final class ConsoleMessageProxy: NSObject, WKScriptMessageHandler {
 
+    /// Set immediately after `super.init()`; the engine cannot be referenced
+    /// before that point.
     weak var target: WebEngine?
 
-    init(target: WebEngine) {
-        self.target = target
+    override init() {
+        super.init()
     }
 
     func userContentController(

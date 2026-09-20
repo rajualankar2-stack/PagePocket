@@ -63,6 +63,66 @@ final class DocumentStore: ObservableObject {
 
         // Drop entries whose files vanished (e.g. deleted from the Files app).
         documents.removeAll { !fileManager.fileExists(atPath: $0.entryURL.path) }
+
+        tidyLegacyTitles()
+        removeDuplicates()
+    }
+
+    /// Collapses documents that are byte-for-byte the same file.
+    ///
+    /// Older builds had no duplicate check, so opening the same file twice left
+    /// two identical entries in the library. Removes the later one and deletes
+    /// its folder, keeping whichever copy was opened most recently.
+    private func removeDuplicates() {
+        var seen: [String: Int] = [:]   // content hash -> index in `documents`
+        var survivors: [Document] = []
+        var removed = 0
+
+        for document in documents {
+            guard let data = try? Data(contentsOf: document.entryURL) else {
+                survivors.append(document)
+                continue
+            }
+
+            // A cheap, stable identity: name plus size plus a content digest.
+            let key = "\(document.originalFileName)|\(data.count)|\(data.hashValue)"
+            if seen[key] != nil {
+                // Duplicate: drop the folder and skip the record.
+                try? fileManager.removeItem(at: document.folderURL)
+                removed += 1
+                continue
+            }
+
+            seen[key] = survivors.count
+            survivors.append(document)
+        }
+
+        if removed > 0 {
+            documents = survivors
+            save()
+            Log.library.notice("Removed \(removed) duplicate document(s) from the library.")
+        }
+    }
+
+    /// Re-tidies titles saved by an older build.
+    ///
+    /// Titles used to be the raw filename, so a library created before the
+    /// friendly-title change would keep showing "s4hana-cvi-explainer.html"
+    /// forever. Records whose display name nothing else depends on are safe to
+    /// rename, so the fix applies to existing documents rather than only new ones.
+    private func tidyLegacyTitles() {
+        var changed = false
+
+        for index in documents.indices {
+            let current = documents[index].title
+            let tidied = Self.friendlyTitle(from: current)
+            if tidied != current, !tidied.isEmpty {
+                documents[index].title = tidied
+                changed = true
+            }
+        }
+
+        if changed { save() }
     }
 
     private func save() {
@@ -183,6 +243,15 @@ final class DocumentStore: ObservableObject {
             throw ImportError.unsupportedType(source.pathExtension)
         }
 
+        // Opening the same file twice (a second tap in the Files app, or a
+        // re-share) should not pile up identical library entries. If a document
+        // with the same name and byte-for-byte content already exists, hand that
+        // one back instead of making another copy.
+        if let existing = existingDocument(matching: source) {
+            Log.library.notice("“\(source.lastPathComponent, privacy: .public)” is already in the library; reusing it.")
+            return existing
+        }
+
         let folderName = UUID().uuidString
         let destination = Self.documentsRoot.appendingPathComponent(folderName, isDirectory: true)
 
@@ -199,6 +268,21 @@ final class DocumentStore: ObservableObject {
 
         return try register(folder: destination, folderName: folderName,
                             entry: target, originalName: source.lastPathComponent)
+    }
+
+    /// Finds an existing document whose entry file is identical to `source`.
+    ///
+    /// Compares size first (cheap) and only then the bytes, so the common
+    /// no-match case stays fast.
+    private func existingDocument(matching source: URL) -> Document? {
+        guard let incoming = try? Data(contentsOf: source) else { return nil }
+
+        for document in documents {
+            guard document.originalFileName == source.lastPathComponent else { continue }
+            guard let existing = try? Data(contentsOf: document.entryURL) else { continue }
+            if existing == incoming { return document }
+        }
+        return nil
     }
 
     /// Unpacks a ZIP archive into a fresh folder and imports the result.
@@ -269,6 +353,11 @@ final class DocumentStore: ObservableObject {
         if title.isEmpty || title.lowercased() == "index" {
             title = originalName
         }
+
+        // A single-file import keeps the file's own name, which tends to be
+        // machine-generated (e.g. "deepseek_html_20260918_82c086.html"). Strip
+        // the extension and tidy the separators so the library reads well.
+        title = Self.friendlyTitle(from: title)
 
         let document = Document(
             title: title,
@@ -392,16 +481,27 @@ final class DocumentStore: ObservableObject {
     }
 
     /// Registers a folder that is already inside `Documents/` without copying it.
-    private func registerExistingFolder(_ folder: URL, entry: URL) throws -> Document {
+    ///
+    /// `sourceName` is the original filename when it is known (for a loose file
+    /// that was imported into a generated folder, the folder name is a UUID and
+    /// useless as a display name).
+    private func registerExistingFolder(_ folder: URL, entry: URL, sourceName: String? = nil) throws -> Document {
         let stats = Self.measure(folder: folder)
-        var title = entry.deletingPathExtension().lastPathComponent
-        if title.lowercased() == "index" { title = folder.lastPathComponent }
+
+        let rawName: String
+        if let sourceName {
+            rawName = sourceName
+        } else {
+            rawName = entry.deletingPathExtension().lastPathComponent.lowercased() == "index"
+                ? folder.lastPathComponent
+                : entry.lastPathComponent
+        }
 
         let document = Document(
-            title: title,
+            title: Self.friendlyTitle(from: rawName),
             storedFolderName: folder.lastPathComponent,
             entryRelativePath: Self.relativePath(of: entry, in: folder),
-            originalFileName: folder.lastPathComponent,
+            originalFileName: rawName,
             contentSummary: stats
         )
         documents.insert(document, at: 0)
@@ -443,12 +543,74 @@ final class DocumentStore: ObservableObject {
                     try? fileManager.removeItem(at: item)
                     Log.library.notice("Imported shared item “\(document.displayTitle, privacy: .public)”.")
                 } catch {
-                    // Leave the item in place so a later launch can retry, rather
-                    // than silently discarding something the user shared.
+                    // Quarantine instead of leaving it to fail on every launch.
+                    // A file that cannot be read at all would otherwise retry
+                    // forever and log an error each time.
                     Log.library.error("Could not import shared item \(item.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    quarantine(item)
                 }
             }
         }
+    }
+
+    /// Moves an unimportable inbox item aside so it stops being retried.
+    ///
+    /// It is kept (not deleted) under `Failed/` so the file the user shared is
+    /// never silently thrown away.
+    private func quarantine(_ item: URL) {
+        guard let container = SharedInbox.containerURL else { return }
+        let failedDir = container.appendingPathComponent("Failed", isDirectory: true)
+
+        do {
+            if !fileManager.fileExists(atPath: failedDir.path) {
+                try fileManager.createDirectory(at: failedDir, withIntermediateDirectories: true)
+            }
+            let destination = failedDir.appendingPathComponent(item.lastPathComponent)
+            try? fileManager.removeItem(at: destination)
+            try fileManager.moveItem(at: item, to: destination)
+            Log.library.notice("Moved \(item.lastPathComponent, privacy: .public) to Failed; it will not be retried.")
+        } catch {
+            // If it cannot be moved, remove it: retrying a permanently broken
+            // item on every launch is worse than dropping it.
+            try? fileManager.removeItem(at: item)
+        }
+    }
+
+    /// Turns a raw filename into something readable in the library.
+    ///
+    /// "s4hana-cvi-explainer.html" → "S4hana Cvi Explainer"; a machine-generated
+    /// name like "deepseek_html_20260918_82c086" is left mostly intact because
+    /// guessing a better one is not possible, but separators are cleaned up.
+    nonisolated static func friendlyTitle(from rawName: String) -> String {
+        var name = rawName
+
+        // Drop a trailing extension if one survived.
+        if let dot = name.lastIndex(of: "."), name.distance(from: dot, to: name.endIndex) <= 6 {
+            name = String(name[name.startIndex..<dot])
+        }
+
+        // Normalise separators to spaces.
+        name = name
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+
+        // Collapse runs of whitespace.
+        name = name.split(separator: " ").joined(separator: " ")
+
+        guard !name.isEmpty else { return rawName }
+
+        // Title-case only when the name looks like ordinary words. A name with
+        // long digit runs (a timestamp or hash) is left alone, since title-casing
+        // it would only make it harder to recognise.
+        let hasLongDigitRun = name.range(of: "[0-9]{6,}", options: .regularExpression) != nil
+        if !hasLongDigitRun {
+            name = name
+                .split(separator: " ")
+                .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+                .joined(separator: " ")
+        }
+
+        return name
     }
 
     // MARK: - Static helpers

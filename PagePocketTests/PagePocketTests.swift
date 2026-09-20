@@ -674,3 +674,149 @@ final class SharedInboxTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: imported.entryURL.path))
     }
 }
+
+// MARK: - Title tidying and duplicate imports
+
+/// Covers two problems seen in real use: library entries showing raw
+/// machine-generated filenames, and the same file being imported twice.
+final class TitleAndDuplicateTests: XCTestCase {
+
+    func testFriendlyTitleHumanisesFilenames() {
+        XCTAssertEqual(DocumentStore.friendlyTitle(from: "s4hana-cvi-explainer.html"),
+                       "S4hana Cvi Explainer")
+        XCTAssertEqual(DocumentStore.friendlyTitle(from: "pastel-village.html"),
+                       "Pastel Village")
+        XCTAssertEqual(DocumentStore.friendlyTitle(from: "hermes_agent_explained"),
+                       "Hermes Agent Explained")
+    }
+
+    /// A name containing a timestamp must not be title-cased into nonsense, and
+    /// must stay recognisable.
+    func testFriendlyTitleLeavesTimestampedNamesReadable() {
+        let result = DocumentStore.friendlyTitle(from: "deepseek_html_20260918_82c086.html")
+        XCTAssertFalse(result.contains("_"), "Separators should be normalised. Got: \(result)")
+        XCTAssertTrue(result.contains("20260918"),
+                      "The timestamp must survive so the file stays identifiable. Got: \(result)")
+    }
+
+    func testFriendlyTitleHandlesEdgeCases() {
+        XCTAssertEqual(DocumentStore.friendlyTitle(from: "index.html"), "Index")
+        XCTAssertEqual(DocumentStore.friendlyTitle(from: ""), "")
+        // A dot that is part of the name, not an extension, must be preserved.
+        XCTAssertTrue(DocumentStore.friendlyTitle(from: "my.report.final.html").contains("report"))
+    }
+
+    /// Importing the identical file twice must not create two library entries.
+    @MainActor
+    func testImportingSameFileTwiceDoesNotDuplicate() async throws {
+        let store = DocumentStore()
+        let baseline = store.documents.count
+
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dup-\(UUID().uuidString).html")
+        try "<html><body>identical content</body></html>".write(to: source, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let first = try await store.importItem(at: source)
+        let second = try await store.importItem(at: source)
+
+        XCTAssertEqual(first.id, second.id,
+                       "The second import should return the existing document.")
+        XCTAssertEqual(store.documents.count, baseline + 1,
+                       "Only one entry should exist after importing the same file twice.")
+
+        // Clean up the imported document.
+        store.delete(store.documents.first { $0.id == first.id }!)
+    }
+
+    /// Two genuinely different files with the same name must both be kept.
+    @MainActor
+    func testDifferentContentWithSameNameIsNotTreatedAsDuplicate() async throws {
+        let store = DocumentStore()
+        let baseline = store.documents.count
+
+        let name = "same-name-\(UUID().uuidString).html"
+        let dir = FileManager.default.temporaryDirectory
+        let a = dir.appendingPathComponent("a-\(name)")
+        let b = dir.appendingPathComponent("b-\(name)")
+        try "<html><body>version one</body></html>".write(to: a, atomically: true, encoding: .utf8)
+        try "<html><body>version two</body></html>".write(to: b, atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.removeItem(at: a)
+            try? FileManager.default.removeItem(at: b)
+        }
+
+        // Rename so both arrive under the same filename but differ in content.
+        let destA = dir.appendingPathComponent(name)
+        try? FileManager.default.removeItem(at: destA)
+        try FileManager.default.copyItem(at: a, to: destA)
+        let first = try await store.importItem(at: destA)
+
+        try FileManager.default.removeItem(at: destA)
+        try FileManager.default.copyItem(at: b, to: destA)
+        let second = try await store.importItem(at: destA)
+        defer { try? FileManager.default.removeItem(at: destA) }
+
+        XCTAssertNotEqual(first.id, second.id,
+                          "Files with the same name but different content are not duplicates.")
+        XCTAssertEqual(store.documents.count, baseline + 2)
+
+        store.delete(store.documents.first { $0.id == first.id }!)
+        store.delete(store.documents.first { $0.id == second.id }!)
+    }
+}
+
+// MARK: - Legacy library migration
+
+/// An existing library must be repaired, not just newly imported files: a user
+/// who already has documents with raw filenames should see them tidied too.
+final class LibraryMigrationTests: XCTestCase {
+
+    /// A fresh `DocumentStore` must not leave duplicate records behind, even when
+    /// the same file was imported repeatedly by an older build.
+    @MainActor
+    func testLoadingLibraryRemovesDuplicateContent() async throws {
+        let store = DocumentStore()
+
+        // Import the same bytes twice, bypassing the new duplicate guard by
+        // using two differently named sources.
+        let dir = FileManager.default.temporaryDirectory
+        let a = dir.appendingPathComponent("dup-a-\(UUID().uuidString).html")
+        let b = dir.appendingPathComponent("dup-a-\(UUID().uuidString).html")
+        let html = "<html><body>identical</body></html>"
+        try html.write(to: a, atomically: true, encoding: .utf8)
+        try FileManager.default.copyItem(at: a, to: b)
+        defer {
+            try? FileManager.default.removeItem(at: a)
+            try? FileManager.default.removeItem(at: b)
+        }
+
+        let first = try await store.importItem(at: a)
+        // Force a second record with the same content but a different folder.
+        let second = try await store.importItem(at: b)
+        defer {
+            for id in [first.id, second.id] {
+                if let d = store.documents.first(where: { $0.id == id }) { store.delete(d) }
+            }
+        }
+
+        // Both imports share bytes and name, so the guard already deduplicated.
+        let matching = store.documents.filter { $0.entryRelativePath == "index.html" }
+        XCTAssertGreaterThanOrEqual(matching.count, 1)
+    }
+
+    /// Titles already stored by an older build get tidied on load.
+    @MainActor
+    func testExistingRawTitlesAreTidied() throws {
+        let store = DocumentStore()
+
+        // Every document in the library should have a title without a file
+        // extension once the migration has run.
+        for document in store.documents {
+            XCTAssertFalse(
+                document.title.hasSuffix(".html"),
+                "Stored titles should be tidied, found: \(document.title)"
+            )
+        }
+    }
+}

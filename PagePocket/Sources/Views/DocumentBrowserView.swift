@@ -121,6 +121,66 @@ struct DocumentBrowserView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            // Surface load failures instead of leaving a blank page. Without
+            // this, a document that fails to load looks identical to one that
+            // rendered nothing — which is impossible to diagnose from the app.
+            if !session.engine.issues.isEmpty && !isShowingConsole {
+                loadFailureBanner
+            }
+        }
+    }
+
+    /// A dismissible summary of why the page did not load, with a way into the
+    /// console for the full detail.
+    private var loadFailureBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.engine.issues.first?.message ?? "This page had a problem.")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    if let detail = session.engine.issues.first?.detail {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                }
+
+                Spacer(minLength: 4)
+
+                Button {
+                    session.engine.clearIssues()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Dismiss")
+            }
+
+            Button {
+                isShowingConsole = true
+            } label: {
+                Text("Open Console")
+                    .font(.footnote.weight(.semibold))
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.separator, lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 3)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityIdentifier("browser.loadFailureBanner")
     }
 
     // MARK: - Bottom bar

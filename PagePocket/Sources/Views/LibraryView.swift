@@ -30,6 +30,13 @@ struct LibraryView: View {
             .navigationDestination(item: $autoOpenDocument) { document in
                 DocumentBrowserView(document: document)
             }
+            // A file opened from another app should appear immediately, not just
+            // be added to the list.
+            .onChange(of: appModel.documentToPresent) { _, document in
+                guard let document else { return }
+                autoOpenDocument = document
+                appModel.documentToPresent = nil
+            }
             .onAppear { performAutoOpenIfRequested() }
             // The Documents folder is visible in the Files app, and the Share
             // Extension stages items in the shared container, so new content can
