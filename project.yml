@@ -12,11 +12,11 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_STRICT_CONCURRENCY: minimal
+    # Signing is left ENABLED and automatic so the project can be deployed to a
+    # real iPhone straight from Xcode: pick a team under Signing & Capabilities
+    # and it works. CI passes CODE_SIGNING_ALLOWED=NO on the command line, which
+    # overrides this without affecting the checked-in project.
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: ""
-    CODE_SIGNING_REQUIRED: NO
-    CODE_SIGNING_ALLOWED: NO
-    CODE_SIGN_IDENTITY: ""
 
 targets:
   PagePocket:
