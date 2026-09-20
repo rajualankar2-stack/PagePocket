@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		06BA9A6474D4652CDC34D830 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A0D727E1B092E02561238BF /* Assets.xcassets */; };
+		190E1569EF9FE9A56C8A9B1A /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6236D55F75185F8D0830EB /* SharedInbox.swift */; };
 		27D8E5D4B8B22F72B200E7E4 /* ScriptRunnerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036FE69278F568F9DB1829C5 /* ScriptRunnerView.swift */; };
 		28DA3962B1C1B301E017E24E /* ConsoleMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF00D60FEC59268572C5E3C /* ConsoleMessage.swift */; };
 		2B736CD2100DC7F7114875AF /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B1EEF3AA53CD5CDD8D041E /* Logging.swift */; };
@@ -15,6 +16,7 @@
 		3843F7A25462CB797E39F71B /* DocumentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4F9EB37D9CB5E9D585654 /* DocumentPicker.swift */; };
 		4D346B0F3D8D43F079624661 /* DocumentSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91402FE97532855D46ABF5A8 /* DocumentSession.swift */; };
 		4DD9616668E001B94E3D9739 /* PagePocketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004A2B935AE1B68A0C043E2 /* PagePocketTests.swift */; };
+		4E51A04D03AF57A05C1C5721 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DDC66B28F53C6BD65646F1 /* ShareViewController.swift */; };
 		918694B9B7846623361A4A09 /* ConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7532B23CB5CD01BB447F98 /* ConsoleView.swift */; };
 		93B347366F24A5E75EF95830 /* LocalHTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DB6D05471BDB3A7907E57C /* LocalHTTPServer.swift */; };
 		95C0ECEE2B84E5F9F75772A2 /* TemporaryFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9888E724E5207AEC0AB83862 /* TemporaryFiles.swift */; };
@@ -26,12 +28,21 @@
 		C4F5364D5E0E242636EFED0E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43FCE664D508623F38693AB6 /* LibraryView.swift */; };
 		D5459E505B01AB23DCFDE5B2 /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 0911199C2196750F93CE4784 /* Samples */; };
 		D6C47F755FAB2233D853AAE3 /* PageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D57D162790D7D3FAF8E35FE /* PageSettingsView.swift */; };
+		DB980E714953AEC69C43083E /* PagePocketShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5DC59E8A9DE0E3AAC7888F4F /* PagePocketShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		DEBA415959ECA9F3FBF47191 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6236D55F75185F8D0830EB /* SharedInbox.swift */; };
 		E35FC4F9BFF60FF938BB0CE0 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01F0E6F571377B74FC2342E0 /* Document.swift */; };
 		EC89FAF0D60DFBEA332F0E46 /* Fixtures in Resources */ = {isa = PBXBuildFile; fileRef = F3E4E2CFBBB0A57CD92CD8A7 /* Fixtures */; };
 		F4CF244330BF1B65688E7F8B /* WebEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2E099F8D19EA015E5F0139 /* WebEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		852BBFA14CF00455AC5558BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DB14848FB5A5B4C8F1729F5F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 89E9DE36F9DA0231C711761B;
+			remoteInfo = PagePocketShare;
+		};
 		D0CA5F17A1B61A3126DD7A3A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DB14848FB5A5B4C8F1729F5F /* Project object */;
@@ -48,9 +59,24 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		2ED30290586B89F9B892582F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DB980E714953AEC69C43083E /* PagePocketShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		01F0E6F571377B74FC2342E0 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		036FE69278F568F9DB1829C5 /* ScriptRunnerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptRunnerView.swift; sourceTree = "<group>"; };
+		06DDC66B28F53C6BD65646F1 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		0911199C2196750F93CE4784 /* Samples */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Samples; path = PagePocket/Resources/Samples; sourceTree = SOURCE_ROOT; };
 		0B2E099F8D19EA015E5F0139 /* WebEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebEngine.swift; sourceTree = "<group>"; };
 		0BF00D60FEC59268572C5E3C /* ConsoleMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleMessage.swift; sourceTree = "<group>"; };
@@ -64,6 +90,7 @@
 		43FCE664D508623F38693AB6 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		46C4F9EB37D9CB5E9D585654 /* DocumentPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPicker.swift; sourceTree = "<group>"; };
 		4C61C370FF5D6FE862DB4A01 /* PagePocketApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PagePocketApp.swift; sourceTree = "<group>"; };
+		5DC59E8A9DE0E3AAC7888F4F /* PagePocketShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = PagePocketShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D57D162790D7D3FAF8E35FE /* PageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageSettingsView.swift; sourceTree = "<group>"; };
 		7A0D727E1B092E02561238BF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7C49FDF0EFF730A3958AE422 /* ZipExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipExtractor.swift; sourceTree = "<group>"; };
@@ -73,6 +100,7 @@
 		9888E724E5207AEC0AB83862 /* TemporaryFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryFiles.swift; sourceTree = "<group>"; };
 		A275CE4291F24B06E6057513 /* DocumentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStore.swift; sourceTree = "<group>"; };
 		B5EFACD6471F489DCDAB9268 /* PagePocket.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PagePocket.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB6236D55F75185F8D0830EB /* SharedInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInbox.swift; sourceTree = "<group>"; };
 		F3E4E2CFBBB0A57CD92CD8A7 /* Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fixtures; path = PagePocketTests/Fixtures; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -127,6 +155,14 @@
 			path = Web;
 			sourceTree = "<group>";
 		};
+		AA22BAAD8905B96226EBEAE0 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				DB6236D55F75185F8D0830EB /* SharedInbox.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		B8A849E08D4D350A4DDC6966 /* PagePocketUITests */ = {
 			isa = PBXGroup;
 			children = (
@@ -150,8 +186,10 @@
 			isa = PBXGroup;
 			children = (
 				1081E814A0F77BADC2F81495 /* PagePocket */,
+				EE9E44A456F8C824D5F6575D /* PagePocketShare */,
 				3B7900ACB9B5454C03CC211B /* PagePocketTests */,
 				B8A849E08D4D350A4DDC6966 /* PagePocketUITests */,
+				AA22BAAD8905B96226EBEAE0 /* Shared */,
 				E8F1634AB359F9178D1D64FC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -169,6 +207,7 @@
 			isa = PBXGroup;
 			children = (
 				B5EFACD6471F489DCDAB9268 /* PagePocket.app */,
+				5DC59E8A9DE0E3AAC7888F4F /* PagePocketShare.appex */,
 				153747E8DD5D81F33E9983DD /* PagePocketTests.xctest */,
 				12A863D54B83F324C5B31773 /* PagePocketUITests.xctest */,
 			);
@@ -186,6 +225,14 @@
 				036FE69278F568F9DB1829C5 /* ScriptRunnerView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		EE9E44A456F8C824D5F6575D /* PagePocketShare */ = {
+			isa = PBXGroup;
+			children = (
+				06DDC66B28F53C6BD65646F1 /* ShareViewController.swift */,
+			);
+			path = PagePocketShare;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -215,10 +262,12 @@
 			buildPhases = (
 				61E8BBEA5248519B71B84525 /* Sources */,
 				488FFE8CAB023F6C7872D535 /* Resources */,
+				2ED30290586B89F9B892582F /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				0FA2FBAB7C3B793C65E96F52 /* PBXTargetDependency */,
 			);
 			name = PagePocket;
 			packageProductDependencies = (
@@ -226,6 +275,23 @@
 			productName = PagePocket;
 			productReference = B5EFACD6471F489DCDAB9268 /* PagePocket.app */;
 			productType = "com.apple.product-type.application";
+		};
+		89E9DE36F9DA0231C711761B /* PagePocketShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B866B7C261C06E44540D3835 /* Build configuration list for PBXNativeTarget "PagePocketShare" */;
+			buildPhases = (
+				35ED5645284629A6F0B89764 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PagePocketShare;
+			packageProductDependencies = (
+			);
+			productName = PagePocketShare;
+			productReference = 5DC59E8A9DE0E3AAC7888F4F /* PagePocketShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		C59CCDC0BBB9AC8738DC897F /* PagePocketTests */ = {
 			isa = PBXNativeTarget;
@@ -256,13 +322,20 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					745E98C284F31088EC3E48E7 = {
+						DevelopmentTeam = 7ABAG66RBQ;
 						ProvisioningStyle = Automatic;
 						TestTargetID = 7A6E8A00C34A7297882872F8;
 					};
 					7A6E8A00C34A7297882872F8 = {
+						DevelopmentTeam = 7ABAG66RBQ;
+						ProvisioningStyle = Automatic;
+					};
+					89E9DE36F9DA0231C711761B = {
+						DevelopmentTeam = 7ABAG66RBQ;
 						ProvisioningStyle = Automatic;
 					};
 					C59CCDC0BBB9AC8738DC897F = {
+						DevelopmentTeam = 7ABAG66RBQ;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -282,6 +355,7 @@
 			projectRoot = "";
 			targets = (
 				7A6E8A00C34A7297882872F8 /* PagePocket */,
+				89E9DE36F9DA0231C711761B /* PagePocketShare */,
 				745E98C284F31088EC3E48E7 /* PagePocketUITests */,
 				C59CCDC0BBB9AC8738DC897F /* PagePocketTests */,
 			);
@@ -309,6 +383,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		35ED5645284629A6F0B89764 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4E51A04D03AF57A05C1C5721 /* ShareViewController.swift in Sources */,
+				190E1569EF9FE9A56C8A9B1A /* SharedInbox.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		61E8BBEA5248519B71B84525 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -327,6 +410,7 @@
 				2CAFB4C3551DFEC8655D35CB /* PagePocketApp.swift in Sources */,
 				D6C47F755FAB2233D853AAE3 /* PageSettingsView.swift in Sources */,
 				27D8E5D4B8B22F72B200E7E4 /* ScriptRunnerView.swift in Sources */,
+				DEBA415959ECA9F3FBF47191 /* SharedInbox.swift in Sources */,
 				95C0ECEE2B84E5F9F75772A2 /* TemporaryFiles.swift in Sources */,
 				F4CF244330BF1B65688E7F8B /* WebEngine.swift in Sources */,
 				C36CE50E1EB3EA65882CF5E1 /* ZipExtractor.swift in Sources */,
@@ -352,6 +436,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0FA2FBAB7C3B793C65E96F52 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 89E9DE36F9DA0231C711761B /* PagePocketShare */;
+			targetProxy = 852BBFA14CF00455AC5558BA /* PBXContainerItemProxy */;
+		};
 		AEB4BB64A742DCC55AECA99F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 7A6E8A00C34A7297882872F8 /* PagePocket */;
@@ -388,6 +477,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PagePocket/Resources/PagePocket.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -445,6 +535,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 7ABAG66RBQ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -511,6 +602,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 7ABAG66RBQ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -533,6 +625,29 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		8DD458317303B163D8945253 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PagePocketShare/PagePocketShare.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PagePocketShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pagepocket.app.share;
+				PRODUCT_NAME = PagePocketShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		99C9E7F1E7DCFFAD8DDFB1C0 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -575,6 +690,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PagePocket/Resources/PagePocket.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -614,6 +730,29 @@
 			};
 			name = Debug;
 		};
+		E908EA7B70F2DA8251CCAD3C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PagePocketShare/PagePocketShare.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PagePocketShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pagepocket.app.share;
+				PRODUCT_NAME = PagePocketShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -640,6 +779,15 @@
 			buildConfigurations = (
 				E3C23390F2ACDB9850093BE9 /* Debug */,
 				0A02A18569F728FC7280A633 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B866B7C261C06E44540D3835 /* Build configuration list for PBXNativeTarget "PagePocketShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8DD458317303B163D8945253 /* Debug */,
+				E908EA7B70F2DA8251CCAD3C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

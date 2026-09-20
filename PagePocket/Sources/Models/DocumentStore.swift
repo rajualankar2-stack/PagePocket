@@ -39,6 +39,7 @@ final class DocumentStore: ObservableObject {
         load()
         seedSampleDocumentsIfFirstLaunch()
         adoptLooseFiles()
+        importSharedItems()
     }
 
     private func createDirectoriesIfNeeded() {
@@ -406,6 +407,48 @@ final class DocumentStore: ObservableObject {
         documents.insert(document, at: 0)
         save()
         return document
+    }
+
+    // MARK: - Files shared from other apps
+
+    /// Imports anything the Share Extension staged in the shared App Group.
+    ///
+    /// The extension runs in its own process and cannot touch the app's sandbox,
+    /// so it copies shared files into a shared container and this drains them.
+    /// Items are moved (not copied) so a failure part-way cannot leave the same
+    /// file to be imported twice on the next launch.
+    func importSharedItems() {
+        guard let inbox = SharedInbox.inboxURL,
+              fileManager.fileExists(atPath: inbox.path) else { return }
+
+        let staged: [URL]
+        do {
+            staged = try fileManager.contentsOfDirectory(
+                at: inbox,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            Log.library.error("Could not read the shared inbox: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+
+        guard !staged.isEmpty else { return }
+
+        for item in staged {
+            Task { @MainActor in
+                do {
+                    let document = try await importItem(at: item)
+                    // Only remove once the copy into the library has succeeded.
+                    try? fileManager.removeItem(at: item)
+                    Log.library.notice("Imported shared item “\(document.displayTitle, privacy: .public)”.")
+                } catch {
+                    // Leave the item in place so a later launch can retry, rather
+                    // than silently discarding something the user shared.
+                    Log.library.error("Could not import shared item \(item.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
     }
 
     // MARK: - Static helpers

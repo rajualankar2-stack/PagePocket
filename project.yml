@@ -17,6 +17,10 @@ settings:
     # and it works. CI passes CODE_SIGNING_ALLOWED=NO on the command line, which
     # overrides this without affecting the checked-in project.
     CODE_SIGN_STYLE: Automatic
+    # Set to the user's team so Xcode and xcodebuild agree. Their Apple ID
+    # (rajualankar2@gmail.com) is signed into Xcode, so automatic signing can
+    # mint a fresh certificate. CI overrides signing on the command line.
+    DEVELOPMENT_TEAM: "7ABAG66RBQ"
 
 targets:
   PagePocket:
@@ -25,9 +29,11 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: PagePocket/Sources
+      - path: Shared
       - path: PagePocket/Resources
         excludes:
           - "Info.plist"
+          - "PagePocket.entitlements"
           - "Samples"
       # A folder reference, so each sample keeps its own directory instead of
       # every file being flattened into the bundle root (which would collide on
@@ -39,6 +45,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.pagepocket.app
         PRODUCT_NAME: PagePocket
         INFOPLIST_FILE: PagePocket/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PagePocket/Resources/PagePocket.entitlements
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -48,6 +55,36 @@ targets:
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SWIFT_EMIT_LOC_STRINGS: YES
+    dependencies:
+      # Embeds the extension into PagePocket.app/PlugIns so iOS can discover it.
+      - target: PagePocketShare
+        embed: true
+        codeSign: true
+
+  # Share Extension: receives HTML from the Files app and other apps, stages it
+  # in the shared App Group container for the app to import.
+  PagePocketShare:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: PagePocketShare
+        excludes:
+          - "Info.plist"
+          - "PagePocketShare.entitlements"
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pagepocket.app.share
+        PRODUCT_NAME: PagePocketShare
+        INFOPLIST_FILE: PagePocketShare/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PagePocketShare/PagePocketShare.entitlements
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
         SWIFT_EMIT_LOC_STRINGS: YES
 
   PagePocketUITests:

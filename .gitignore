@@ -25,3 +25,7 @@ applog.txt
 local-build/
 device-build/
 *.xcresult
+
+# Signing (personal team, machine-specific)
+devsign/
+simsign/

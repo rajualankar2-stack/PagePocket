@@ -540,3 +540,137 @@ final class LooseFileAdoptionTests: XCTestCase {
                        "A folder without HTML should not become a document.")
     }
 }
+
+/// Covers the Share Extension's staging area: the App Group container that lets
+/// a separate process hand files to the app.
+///
+/// **These tests skip when the container is unavailable**, which is the normal
+/// case for an unsigned simulator build: `CODE_SIGNING_ALLOWED=NO` (what CI
+/// uses) strips entitlements, so App Group containers do not exist there. The
+/// container is real on a signed device build, which is where sharing actually
+/// happens — so the tests run there and skip where they cannot be meaningful,
+/// rather than reporting a false failure.
+final class SharedInboxTests: XCTestCase {
+
+    /// Skips the test unless a real App Group container is present.
+    private func requireContainer() throws {
+        guard SharedInbox.containerURL != nil else {
+            throw XCTSkip("No App Group container in this build. Expected for an unsigned simulator build; run against a signed device build to exercise it.")
+        }
+    }
+
+    func testAppGroupContainerIsReachable() throws {
+        try requireContainer()
+
+        // If the entitlement were missing or mismatched between targets, this
+        // would be nil and sharing would silently do nothing.
+        let container = try XCTUnwrap(SharedInbox.containerURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: container.path),
+                      "The container path should exist once the entitlement is present.")
+    }
+
+    func testInboxIsCreatedAndUsable() throws {
+        try requireContainer()
+
+        let inbox = try SharedInbox.ensureInbox()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inbox.path))
+
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: inbox.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue, "The inbox must be a directory.")
+    }
+
+    func testStagingCopiesFileIntoInbox() throws {
+        try requireContainer()
+
+        let inbox = try SharedInbox.ensureInbox()
+
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stage-\(UUID().uuidString).html")
+        try "<html><body>shared</body></html>".write(to: source, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let staged = try SharedInbox.stage(at: source, preferredName: "Staged-\(UUID().uuidString).html")
+        defer { try? FileManager.default.removeItem(at: staged) }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staged.path),
+                      "The staged copy should exist in the inbox.")
+        XCTAssertEqual(staged.deletingLastPathComponent().standardizedFileURL.path,
+                       inbox.standardizedFileURL.path,
+                       "The staged file must live inside the inbox.")
+
+        let contents = try String(contentsOf: staged, encoding: .utf8)
+        XCTAssertTrue(contents.contains("shared"), "The copy should preserve the file's contents.")
+
+        // The original must be left alone; the app does the moving later.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path),
+                      "Staging should copy, not move, so the source is untouched.")
+    }
+
+    /// Two files sharing a name must not overwrite one another, or sharing
+    /// index.html twice would silently lose the first.
+    func testStagingNeverOverwritesAnExistingName() throws {
+        try requireContainer()
+
+        let first = try SharedInbox.stage(at: try makeSource("a"), preferredName: "index.html")
+        let second = try SharedInbox.stage(at: try makeSource("b"), preferredName: "index.html")
+        defer {
+            try? FileManager.default.removeItem(at: first)
+            try? FileManager.default.removeItem(at: second)
+        }
+
+        XCTAssertNotEqual(first.path, second.path,
+                          "A name collision must produce a distinct file.")
+
+        XCTAssertTrue(try String(contentsOf: first, encoding: .utf8).contains("a"),
+                      "The first file must survive.")
+        XCTAssertTrue(try String(contentsOf: second, encoding: .utf8).contains("b"),
+                      "The second file must be stored separately.")
+    }
+
+    private func makeSource(_ marker: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("src-\(UUID().uuidString).html")
+        try "<html><body>\(marker)</body></html>".write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    /// The app must pick up what the extension staged, and clear it afterwards so
+    /// the same file is not imported on every launch.
+    @MainActor
+    func testAppImportsStagedItemsAndEmptiesInbox() async throws {
+        try requireContainer()
+
+        let inbox = try SharedInbox.ensureInbox()
+
+        for leftover in (try? FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil)) ?? [] {
+            try? FileManager.default.removeItem(at: leftover)
+        }
+
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shared-\(UUID().uuidString).html")
+        try "<html><body>from the share sheet</body></html>".write(to: source, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let staged = try SharedInbox.stage(at: source, preferredName: "Shared-\(UUID().uuidString).html")
+
+        let store = DocumentStore()
+        let before = store.documents.count
+        store.importSharedItems()
+
+        // The import runs asynchronously; wait for the inbox to drain.
+        let deadline = Date().addingTimeInterval(20)
+        var drained = false
+        while Date() < deadline {
+            if !FileManager.default.fileExists(atPath: staged.path) { drained = true; break }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+
+        XCTAssertTrue(drained, "The staged item should be consumed once imported.")
+        XCTAssertEqual(store.documents.count, before + 1,
+                       "The shared item should appear in the library.")
+
+        let imported = try XCTUnwrap(store.documents.first { $0.originalFileName.hasSuffix(".html") })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imported.entryURL.path))
+    }
+}
