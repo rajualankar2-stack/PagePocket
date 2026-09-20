@@ -1,5 +1,6 @@
 import XCTest
 import CommonCrypto
+import WebKit
 @testable import PagePocket
 
 /// Unit tests for the pieces the UI tests cannot reach directly: path
@@ -1095,5 +1096,57 @@ final class ContentSecurityPolicyTests: XCTestCase {
         let header = try headers(for: "style.css")
         XCTAssertNil(header["content-security-policy"],
                      "A stylesheet does not need a CSP header.")
+    }
+}
+
+// MARK: - Document isolation
+
+/// The isolation fix is only real if each engine gets a *distinct* data store.
+/// If `WKWebsiteDataStore.nonPersistent()` returned a shared instance, documents
+/// would still share localStorage and the fix would be cosmetic.
+@MainActor
+final class DocumentIsolationTests: XCTestCase {
+
+    func testEachEngineGetsItsOwnDataStore() throws {
+        let first = WebEngine()
+        let second = WebEngine()
+
+        let firstStore = first.webView.configuration.websiteDataStore
+        let secondStore = second.webView.configuration.websiteDataStore
+
+        XCTAssertFalse(firstStore === secondStore,
+                       "Each document must get its own data store, or they share localStorage.")
+
+        // And none of them may be the persistent default.
+        XCTAssertFalse(firstStore === WKWebsiteDataStore.default(),
+                       "A document must not use the shared persistent store.")
+        XCTAssertFalse(firstStore.isPersistent,
+                       "Document storage must not persist to disk.")
+        XCTAssertFalse(secondStore.isPersistent)
+    }
+
+    /// The console bridge must be scoped to the document's own top frame, so an
+    /// embedded remote iframe cannot reach native code.
+    func testConsoleBridgeIsMainFrameOnly() throws {
+        let engine = WebEngine()
+        let scripts = engine.webView.configuration.userContentController.userScripts
+
+        XCTAssertFalse(scripts.isEmpty, "The console bridge script should be installed.")
+        for script in scripts {
+            XCTAssertTrue(script.isForMainFrameOnly,
+                          "Bridge scripts must not run in sub-frames.")
+        }
+    }
+
+    /// Long console output must be clipped: the message cap bounds the count, not
+    /// the size, so an unbounded string could pin gigabytes.
+    func testConsoleMessagesAreClipped() throws {
+        let engine = WebEngine()
+        engine.recordConsoleMessage(level: "log", text: String(repeating: "A", count: 500_000))
+
+        let message = try XCTUnwrap(engine.consoleMessages.last)
+        XCTAssertLessThan(message.text.count, 10_000,
+                          "A huge console message must be truncated before it is stored.")
+        XCTAssertTrue(message.text.contains("truncated"))
     }
 }
