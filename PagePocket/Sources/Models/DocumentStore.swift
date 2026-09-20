@@ -665,6 +665,165 @@ final class DocumentStore: ObservableObject {
         return name
     }
 
+    // MARK: - Pasted markup
+
+    /// Creates a document from markup the user pasted or typed.
+    ///
+    /// The result is an ordinary document folder on disk, served over the local
+    /// HTTP server like any imported file. That matters: pasted markup is just
+    /// as untrusted as a downloaded file, so it gets the same Content-Security-
+    /// Policy, its own storage, and the same navigation limits for free — no
+    /// separate execution path to secure.
+    @discardableResult
+    func createDocument(fromMarkup markup: String, suggestedName: String? = nil) throws -> Document {
+        let trimmed = markup.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw PasteError.empty
+        }
+
+        // Guard against a paste that would be slow or impossible to render. The
+        // web view would handle far more, but a multi-megabyte paste is almost
+        // always a mistake (a whole file in the clipboard) rather than intent.
+        let maxMarkupBytes = 8 << 20   // 8 MB
+        guard trimmed.utf8.count <= maxMarkupBytes else {
+            throw PasteError.tooLarge(trimmed.utf8.count)
+        }
+
+        let folderName = UUID().uuidString
+        let destination = Self.documentsRoot.appendingPathComponent(folderName, isDirectory: true)
+        try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        // If the paste is a fragment rather than a whole document, wrap it so the
+        // browser renders it as a page instead of showing raw text. Everything
+        // the user wrote is preserved; only the missing scaffolding is added.
+        let html = Self.normaliseMarkup(trimmed)
+        let entry = destination.appendingPathComponent("index.html")
+
+        do {
+            try html.write(to: entry, atomically: true, encoding: .utf8)
+        } catch {
+            try? fileManager.removeItem(at: destination)
+            throw error
+        }
+
+        let name = Self.pastedDocumentName(from: suggestedName, markup: trimmed)
+        return try register(folder: destination, folderName: folderName,
+                            entry: entry, originalName: name)
+    }
+
+    /// Wraps a bare fragment in a minimal HTML document.
+    ///
+    /// A pasted `<div>hello</div>` would otherwise render as literal text,
+    /// because a response with no `<html>` is still parsed as HTML — but leaving
+    /// it un-wrapped loses the viewport meta tag these documents need on a phone.
+    nonisolated static func normaliseMarkup(_ markup: String) -> String {
+        let lowered = markup.lowercased()
+        let looksComplete = lowered.contains("<html") || lowered.contains("<!doctype")
+        if looksComplete { return markup }
+
+        // Preserve the author's markup verbatim inside a document shell.
+        return """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <title>Pasted HTML</title>
+        </head>
+        <body>
+        \(markup)
+        </body>
+        </html>
+        """
+    }
+
+    /// Picks a display name: the page's own `<title>` if it has one, else a
+    /// generated "Pasted Page N".
+    private static func pastedDocumentName(from suggestedName: String?, markup: String) -> String {
+        if let suggestedName, !suggestedName.trimmingCharacters(in: .whitespaces).isEmpty {
+            return suggestedName
+        }
+
+        if let title = Self.extractTitle(from: markup), !title.isEmpty {
+            return title
+        }
+        return "Pasted Page"
+    }
+
+    /// Pulls the `<title>` out of markup, if present.
+    nonisolated static func extractTitle(from markup: String) -> String? {
+        guard let openRange = markup.range(of: "<title", options: .caseInsensitive),
+              let closeAngle = markup.range(of: ">", range: openRange.upperBound..<markup.endIndex),
+              let closeRange = markup.range(of: "</title", options: .caseInsensitive,
+                                            range: closeAngle.upperBound..<markup.endIndex)
+        else { return nil }
+
+        let raw = String(markup[closeAngle.upperBound..<closeRange.lowerBound])
+        let decoded = raw
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Keep it to something that fits a list row.
+        return decoded.isEmpty ? nil : String(decoded.prefix(60))
+    }
+
+    enum PasteError: LocalizedError {
+        case empty
+        case tooLarge(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .empty:
+                return "There’s nothing to run. Paste some HTML first."
+            case .tooLarge(let bytes):
+                let size = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+                return "That paste is \(size). PagePocket runs pastes up to 8 MB."
+            }
+        }
+    }
+
+    /// Replaces a document's entry file with new markup and re-registers it.
+    ///
+    /// Used by the editor so a user can iterate on a page without importing it
+    /// again. The write is atomic, so a failure part-way cannot leave the
+    /// document with a half-written file.
+    @discardableResult
+    func updateMarkup(for document: Document, markup: String, newName: String? = nil) throws -> Document {
+        let trimmed = markup.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw PasteError.empty }
+
+        let maxMarkupBytes = 8 << 20
+        guard trimmed.utf8.count <= maxMarkupBytes else {
+            throw PasteError.tooLarge(trimmed.utf8.count)
+        }
+
+        // Only wrap when the original was a fragment, so editing a complete
+        // document does not quietly acquire an extra html/body wrapper.
+        let html = Self.normaliseMarkup(trimmed)
+        try html.write(to: document.entryURL, atomically: true, encoding: .utf8)
+
+        guard let index = documents.firstIndex(where: { $0.id == document.id }) else {
+            return document
+        }
+
+        if let newName, !newName.trimmingCharacters(in: .whitespaces).isEmpty {
+            documents[index].title = newName.trimmingCharacters(in: .whitespaces)
+        } else {
+            // Re-derive the title from the markup, so a changed <title> is
+            // reflected in the library.
+            let derived = Self.pastedDocumentName(from: nil, markup: trimmed)
+            if derived != "Pasted Page" { documents[index].title = derived }
+        }
+
+        documents[index].contentSummary = Self.measure(folder: document.folderURL)
+        save()
+        return documents[index]
+    }
+
     // MARK: - Static helpers
 
     // These are pure filesystem helpers with no shared mutable state, so they

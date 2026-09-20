@@ -7,6 +7,7 @@ struct LibraryView: View {
     @EnvironmentObject private var store: DocumentStore
 
     @State private var isShowingPicker = false
+    @State private var isShowingPaste = false
     @State private var searchText = ""
     @State private var documentToDelete: Document?
     @State private var documentToRename: Document?
@@ -52,6 +53,13 @@ struct LibraryView: View {
                     Task { await store.importPicks(urls) }
                 }
                 .ignoresSafeArea()
+            }
+            .sheet(isPresented: $isShowingPaste) {
+                PasteHTMLView(mode: .create) { document in
+                    // Take the user straight into what they just ran.
+                    autoOpenDocument = document
+                }
+                .environmentObject(store)
             }
             .alert("Import Failed", isPresented: errorBinding) {
                 Button("OK", role: .cancel) { store.lastError = nil }
@@ -159,11 +167,22 @@ struct LibraryView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                isShowingPicker = true
+            Menu {
+                Button {
+                    isShowingPaste = true
+                } label: {
+                    Label("Paste HTML", systemImage: "doc.on.clipboard")
+                }
+
+                Button {
+                    isShowingPicker = true
+                } label: {
+                    Label("Import File or Folder", systemImage: "folder")
+                }
             } label: {
-                Label("Import", systemImage: "plus")
+                Label("Add", systemImage: "plus")
             }
+            .accessibilityIdentifier("library.add")
         }
     }
 

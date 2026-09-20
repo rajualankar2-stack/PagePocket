@@ -1150,3 +1150,148 @@ final class DocumentIsolationTests: XCTestCase {
         XCTAssertTrue(message.text.contains("truncated"))
     }
 }
+
+// MARK: - Pasted markup
+
+/// Paste-and-run is a new execution path for untrusted input, so it gets the
+/// same scrutiny as import: it must produce a real document on disk (served over
+/// the local server with the CSP intact), not a special case that bypasses the
+/// protections.
+@MainActor
+final class PasteMarkupTests: XCTestCase {
+
+    func testCreatesRunnableDocumentFromMarkup() throws {
+        let store = DocumentStore()
+        let before = store.documents.count
+
+        let html = """
+        <!DOCTYPE html><html><head><title>Pasted Demo</title></head>
+        <body><h1 id="t">Hello</h1><script>document.title='ran'</script></body></html>
+        """
+        let document = try store.createDocument(fromMarkup: html)
+        defer { store.delete(store.documents.first { $0.id == document.id }!) }
+
+        XCTAssertEqual(store.documents.count, before + 1)
+        XCTAssertEqual(document.entryRelativePath, "index.html")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: document.entryURL.path),
+                      "The markup must be written to a real file so the server can serve it.")
+
+        let written = try String(contentsOf: document.entryURL, encoding: .utf8)
+        XCTAssertEqual(written, html, "Pasted markup must be preserved byte-for-byte.")
+    }
+
+    /// A complete document must not be wrapped — that would nest <html> in <html>.
+    func testCompleteDocumentIsNotWrapped() throws {
+        let full = "<!DOCTYPE html><html><body><p>ok</p></body></html>"
+        XCTAssertEqual(DocumentStore.normaliseMarkup(full), full)
+    }
+
+    /// A bare fragment would render without a viewport tag on a phone, so it is
+    /// wrapped — but the author's markup must survive untouched inside.
+    func testFragmentIsWrappedAndPreserved() throws {
+        let fragment = "<div class=\"x\">hi</div>"
+        let normalised = DocumentStore.normaliseMarkup(fragment)
+
+        XCTAssertTrue(normalised.contains("<!DOCTYPE html>"))
+        XCTAssertTrue(normalised.contains("viewport"), "A phone needs a viewport meta tag.")
+        XCTAssertTrue(normalised.contains(fragment),
+                      "The author's markup must appear verbatim inside the shell.")
+    }
+
+    func testTitleIsTakenFromMarkupForNaming() throws {
+        let store = DocumentStore()
+        let document = try store.createDocument(
+            fromMarkup: "<html><head><title>My Great Page</title></head><body>x</body></html>")
+        defer { store.delete(store.documents.first { $0.id == document.id }!) }
+
+        XCTAssertEqual(document.title, "My Great Page")
+    }
+
+    func testExplicitNameWinsOverPageTitle() throws {
+        let store = DocumentStore()
+        let document = try store.createDocument(
+            fromMarkup: "<html><head><title>Ignored</title></head><body>x</body></html>",
+            suggestedName: "Chosen Name")
+        defer { store.delete(store.documents.first { $0.id == document.id }!) }
+
+        XCTAssertEqual(document.title, "Chosen Name")
+    }
+
+    func testTitleExtractionHandlesEntitiesAndMissingTitle() {
+        XCTAssertEqual(DocumentStore.extractTitle(from: "<title>A &amp; B</title>"), "A & B")
+        XCTAssertNil(DocumentStore.extractTitle(from: "<html><body>no title</body></html>"))
+        XCTAssertNil(DocumentStore.extractTitle(from: "<title>unclosed"))
+    }
+
+    func testEmptyAndOversizedPastesAreRejected() throws {
+        let store = DocumentStore()
+
+        XCTAssertThrowsError(try store.createDocument(fromMarkup: "   \n  ")) { error in
+            guard case DocumentStore.PasteError.empty = error else {
+                return XCTFail("Expected .empty, got \(error)")
+            }
+        }
+
+        // Just over the 8 MB ceiling.
+        let huge = String(repeating: "a", count: (8 << 20) + 16)
+        XCTAssertThrowsError(try store.createDocument(fromMarkup: huge)) { error in
+            guard case DocumentStore.PasteError.tooLarge = error else {
+                return XCTFail("Expected .tooLarge, got \(error)")
+            }
+        }
+    }
+
+    /// Editing must write through and be reflected on disk, which is what makes
+    /// the reload actually show a change.
+    func testEditingMarkupUpdatesTheStoredFile() throws {
+        let store = DocumentStore()
+        let document = try store.createDocument(
+            fromMarkup: "<html><head><title>First</title></head><body>v1</body></html>")
+        defer { store.delete(store.documents.first { $0.id == document.id }!) }
+
+        let updated = try store.updateMarkup(
+            for: document,
+            markup: "<html><head><title>Second</title></head><body>v2</body></html>")
+
+        let onDisk = try String(contentsOf: updated.entryURL, encoding: .utf8)
+        XCTAssertTrue(onDisk.contains("v2"), "The edited markup must be persisted.")
+        XCTAssertFalse(onDisk.contains("v1"), "The old content must be gone.")
+        XCTAssertEqual(updated.title, "Second", "A changed <title> should update the library entry.")
+    }
+
+    /// Pasted content must be served like any other document, CSP included —
+    /// otherwise paste would be a way around the protections added for import.
+    func testPastedDocumentIsServedWithCSP() throws {
+        let store = DocumentStore()
+        let document = try store.createDocument(fromMarkup: "<html><body>pasted</body></html>")
+        defer { store.delete(store.documents.first { $0.id == document.id }!) }
+
+        let server = LocalHTTPServer.shared
+        if server.port == 0 { try server.start() }
+        let prefix = server.mount(directory: document.folderURL, token: "paste-\(UUID().uuidString)")
+
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(server.port)\(prefix)index.html"))
+        let semaphore = DispatchSemaphore(value: 0)
+        var csp: String?
+
+        URLSession.shared.dataTask(with: URLRequest(url: url)) { _, response, _ in
+            csp = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Security-Policy")
+            semaphore.signal()
+        }.resume()
+
+        _ = semaphore.wait(timeout: .now() + 15)
+
+        XCTAssertNotNil(csp, "A pasted document must be served with the same CSP as an import.")
+        XCTAssertTrue(csp?.contains("connect-src 'self'") == true)
+    }
+
+    /// Markup detection drives whether the clipboard is pre-filled, so it should
+    /// not grab ordinary prose.
+    func testMarkupDetectionDistinguishesProseFromHTML() {
+        XCTAssertTrue(PasteHTMLView.looksLikeMarkup("<div>hi</div>"))
+        XCTAssertTrue(PasteHTMLView.looksLikeMarkup("<!DOCTYPE html><html></html>"))
+        XCTAssertTrue(PasteHTMLView.looksLikeMarkup("<script>alert(1)</script>"))
+        XCTAssertFalse(PasteHTMLView.looksLikeMarkup("Just a normal sentence about lunch."))
+        XCTAssertFalse(PasteHTMLView.looksLikeMarkup(""))
+    }
+}

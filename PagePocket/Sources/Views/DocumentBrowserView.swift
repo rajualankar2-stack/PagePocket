@@ -16,6 +16,8 @@ struct DocumentBrowserView: View {
     @State private var isShowingConsole = false
     @State private var isShowingSettings = false
     @State private var isShowingRunner = false
+    @State private var isShowingEditor = false
+    @State private var editedDocument: Document?
     @State private var isImmersive = false
     @State private var shareItem: ShareItem?
     @State private var pendingExternalURL: URL?
@@ -66,6 +68,16 @@ struct DocumentBrowserView: View {
         }
         .sheet(isPresented: $isShowingRunner) {
             ScriptRunnerView(engine: session.engine)
+        }
+        .sheet(isPresented: $isShowingEditor) {
+            PasteHTMLView(mode: .edit(document)) { updated in
+                // Re-serve from disk so the change actually takes effect: the
+                // server reads the file per request, but the web view needs to
+                // be told to fetch it again.
+                editedDocument = updated
+                session.engine.hardReload()
+            }
+            .environmentObject(store)
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
@@ -289,6 +301,12 @@ struct DocumentBrowserView: View {
                         isShowingRunner = true
                     } label: {
                         Label("Run JavaScript", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+
+                    Button {
+                        isShowingEditor = true
+                    } label: {
+                        Label("Edit HTML", systemImage: "square.and.pencil")
                     }
 
                     Button {

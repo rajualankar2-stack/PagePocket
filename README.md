@@ -38,11 +38,22 @@ The listener is pinned to the loopback interface, so nothing is reachable from y
 ## Features
 
 **Import**
+- **Paste HTML and run it** — no file needed
 - Open a single `.html` file, an entire **folder**, or a `.zip` bundle
 - Multiple selection in one pass
 - **Share to PagePocket** from the Files app, Safari, Mail or any share sheet
 - Drop files straight into the app's Documents folder (Files app or iCloud Drive) — they are picked up automatically
 - Imported content also lives in the app's Documents folder, visible in the Files app
+
+**Paste and run**
+
+Tap **+ → Paste HTML**, paste your markup, and tap **Run**. If your clipboard already contains HTML it is filled in for you.
+
+- A bare fragment like `<div>hi</div>` is wrapped in a page shell (so it gets a viewport tag on a phone); a complete document is left untouched
+- The document is named after its `<title>` unless you type a name
+- **Edit HTML** in the options menu reopens the source of any document — pasted or imported — so you can iterate and re-run
+
+Pasted markup becomes an ordinary document on disk, served over the local server. That is deliberate: it means paste inherits exactly the same Content-Security-Policy, storage isolation and navigation limits as an imported file, rather than being a second execution path that would need securing separately.
 
 **Handling HTML files**
 
