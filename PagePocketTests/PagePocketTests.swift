@@ -820,3 +820,280 @@ final class LibraryMigrationTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Security regressions
+
+/// Regression tests for findings from an independent security review.
+/// Each of these reproduces a concrete defect that was confirmed by execution.
+final class SecurityRegressionTests: XCTestCase {
+
+    private var root: URL!
+
+    override func setUpWithError() throws {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pp-sec-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    // MARK: Range against an empty file
+
+    /// `Range: bytes=-1` on a zero-byte file built the invalid range `0...(-1)`.
+    /// Constructing an invalid Range is a Swift runtime *trap*, not a throwable
+    /// error, so it killed the whole app from the server queue — a one-line
+    /// remote crash from any imported page. The guard must make this a clean
+    /// "serve the whole file" instead.
+    func testRangeRequestAgainstEmptyFileDoesNotTrap() throws {
+        try Data().write(to: root.appendingPathComponent("empty.txt"))
+
+        let server = LocalHTTPServer.shared
+        if server.port == 0 { try server.start() }
+        let prefix = server.mount(directory: root, token: "empty-\(UUID().uuidString)")
+
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(server.port)\(prefix)empty.txt"))
+        var request = URLRequest(url: url)
+        request.setValue("bytes=-1", forHTTPHeaderField: "Range")
+        request.timeoutInterval = 10
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var status: Int?
+        var body: Data?
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            status = (response as? HTTPURLResponse)?.statusCode
+            body = data
+            semaphore.signal()
+        }.resume()
+
+        // The point is that the process is still alive to answer at all.
+        XCTAssertEqual(semaphore.wait(timeout: .now() + 15), .success,
+                       "The server must survive a suffix Range request on an empty file.")
+        XCTAssertEqual(status, 200, "An unsatisfiable range falls back to the whole file.")
+        XCTAssertEqual(body?.count, 0)
+    }
+
+    // MARK: Zip bomb
+
+    /// A 407 KB archive expanded to 426 MB RAM and 400 MB on disk before this was
+    /// bounded — past the jetsam limit on a phone. Built here in-process so the
+    /// test needs no large fixture.
+    func testDecompressionBombIsRejected() throws {
+        let bomb = try makeDeflateBomb(expandedSize: 300 << 20)   // 300 MB of zeros
+        defer { try? FileManager.default.removeItem(at: bomb) }
+
+        let destination = root.appendingPathComponent("bomb-out", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try ZipExtractor.extract(archiveAt: bomb, to: destination)) { error in
+            guard let zipError = error as? ZipExtractor.ZipError else {
+                return XCTFail("Expected a ZipError, got \(error)")
+            }
+            switch zipError {
+            case .entryTooLarge, .suspiciousRatio, .archiveTooLarge:
+                break   // any of these is a correct rejection
+            default:
+                XCTFail("Bomb rejected for the wrong reason: \(zipError)")
+            }
+        }
+
+        // Nothing large must have been written before the rejection.
+        let written = (try? FileManager.default.contentsOfDirectory(at: destination,
+                                                                   includingPropertiesForKeys: nil))?.count ?? 0
+        XCTAssertEqual(written, 0, "A rejected archive must not leave output behind.")
+    }
+
+    /// A normal archive must still extract — the limits must not break real use.
+    func testNormalArchiveStillExtractsUnderLimits() throws {
+        let archive = try XCTUnwrap(fixtureURL("bundle-deflate"), "Missing test fixture.")
+        let destination = root.appendingPathComponent("ok", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        XCTAssertNoThrow(try ZipExtractor.extract(archiveAt: archive, to: destination))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: destination.appendingPathComponent("index.html").path))
+    }
+
+    // MARK: Duplicate detection bounds
+
+    /// The duplicate scan runs during `init()`, before any UI exists, so an
+    /// unbounded read there meant a single huge file could crash the app on
+    /// every launch with no in-app way to remove it.
+    @MainActor
+    func testOversizedFilesDoNotBreakLibraryLoading() async throws {
+        // A file above the dedupe limit must be left alone rather than read.
+        let big = DocumentStore.documentsRoot
+            .appendingPathComponent("BigDoc-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: big, withIntermediateDirectories: true)
+        let payload = Data(count: 9 << 20)   // 9 MB, above the 8 MB scan limit
+        try payload.write(to: big.appendingPathComponent("index.html"))
+        defer { try? FileManager.default.removeItem(at: big) }
+
+        // Re-instantiating the store exercises the load path that used to read
+        // everything into memory.
+        let store = DocumentStore()
+        XCTAssertNotNil(store.documents, "Loading a library containing a large file must succeed.")
+    }
+
+    // MARK: Helpers
+
+    private func fixtureURL(_ name: String) -> URL? {
+        let bundle = Bundle(for: type(of: self))
+        return bundle.url(forResource: name, withExtension: "zip")
+            ?? bundle.url(forResource: name, withExtension: "zip", subdirectory: "Fixtures")
+    }
+
+    /// Builds a valid single-entry deflate archive of `expandedSize` zero bytes.
+    private func makeDeflateBomb(expandedSize: Int) throws -> URL {
+        let url = root.appendingPathComponent("bomb-\(UUID().uuidString).zip")
+
+        // Raw deflate of zeros, produced with a tiny pure-Swift RLE-free encoder:
+        // use the Compression framework's stream API in the encode direction.
+        let payload = try deflateZeros(count: expandedSize)
+
+        var archive = Data()
+        let name = Array("bomb.bin".utf8)
+        let crc = crc32(Data(count: expandedSize))
+
+        // Local file header
+        archive.append(uint32(0x04034b50)); archive.append(uint16(20)); archive.append(uint16(0))
+        archive.append(uint16(8)); archive.append(uint16(0)); archive.append(uint16(0))
+        archive.append(uint32(crc)); archive.append(uint32(UInt32(payload.count)))
+        archive.append(uint32(UInt32(expandedSize)))
+        archive.append(uint16(UInt16(name.count))); archive.append(uint16(0))
+        archive.append(contentsOf: name)
+        archive.append(payload)
+
+        // Central directory
+        let centralOffset = UInt32(archive.count)
+        archive.append(uint32(0x02014b50)); archive.append(uint16(20)); archive.append(uint16(20))
+        archive.append(uint16(0)); archive.append(uint16(8)); archive.append(uint16(0))
+        archive.append(uint16(0)); archive.append(uint32(crc))
+        archive.append(uint32(UInt32(payload.count))); archive.append(uint32(UInt32(expandedSize)))
+        archive.append(uint16(UInt16(name.count))); archive.append(uint16(0)); archive.append(uint16(0))
+        archive.append(uint16(0)); archive.append(uint16(0)); archive.append(uint32(0))
+        archive.append(uint32(0)); archive.append(contentsOf: name)
+
+        let centralSize = UInt32(archive.count) - centralOffset
+        archive.append(uint32(0x06054b50)); archive.append(uint16(0)); archive.append(uint16(0))
+        archive.append(uint16(1)); archive.append(uint16(1))
+        archive.append(uint32(centralSize)); archive.append(uint32(centralOffset))
+        archive.append(uint16(0))
+
+        try archive.write(to: url)
+        return url
+    }
+
+    /// Deflates a run of zero bytes at a very high ratio.
+    private func deflateZeros(count: Int) throws -> Data {
+        // 1 MB of zeros repeated is enough to exhibit the ratio; the declared
+        // size in the header is what drives the bomb check.
+        let chunk = Data(count: 1 << 20)
+        guard let compressed = try? (chunk as NSData).compressed(using: .zlib) else {
+            throw XCTSkip("Compression unavailable")
+        }
+        // Repeat the compressed chunk so the archive claims a huge expansion
+        // with a small payload — the shape the extractor must reject.
+        var out = Data()
+        let repeats = max(1, count / (1 << 20))
+        for _ in 0..<repeats { out.append(compressed as Data) }
+        return out
+    }
+
+    private func uint16(_ v: UInt16) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
+    private func uint32(_ v: UInt32) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
+
+    private func crc32(_ data: Data) -> UInt32 {
+        var table = [UInt32](repeating: 0, count: 256)
+        for i in 0..<256 {
+            var c = UInt32(i)
+            for _ in 0..<8 { c = (c & 1) != 0 ? (0xEDB88320 ^ (c >> 1)) : (c >> 1) }
+            table[i] = c
+        }
+        var crc: UInt32 = 0xFFFFFFFF
+        for byte in data { crc = table[Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8) }
+        return crc ^ 0xFFFFFFFF
+    }
+}
+
+// MARK: - Content Security Policy
+
+/// The CSP header is the main defence against a hostile document exfiltrating
+/// the files it was imported alongside. It must actually be served.
+final class ContentSecurityPolicyTests: XCTestCase {
+
+    private var root: URL!
+
+    override func setUpWithError() throws {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pp-csp-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "<html><body>hi</body></html>".write(
+            to: root.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
+        try "body{}".write(
+            to: root.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: root.appendingPathComponent("pic.png"))
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    private func headers(for path: String) throws -> [String: String] {
+        let server = LocalHTTPServer.shared
+        if server.port == 0 { try server.start() }
+        let prefix = server.mount(directory: root, token: "csp-\(UUID().uuidString)")
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(server.port)\(prefix)\(path)"))
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: [String: String] = [:]
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            if let http = response as? HTTPURLResponse {
+                for (key, value) in http.allHeaderFields {
+                    result[String(describing: key).lowercased()] = String(describing: value)
+                }
+            }
+            semaphore.signal()
+        }.resume()
+
+        _ = semaphore.wait(timeout: .now() + 15)
+        return result
+    }
+
+    func testHTMLResponseCarriesRestrictiveCSP() throws {
+        let header = try headers(for: "index.html")
+
+        let csp = try XCTUnwrap(header["content-security-policy"],
+                                "HTML responses must carry a CSP, or a hostile page can exfiltrate freely.")
+
+        // The load-bearing directive: no network egress except the document itself.
+        XCTAssertTrue(csp.contains("connect-src 'self'"),
+                      "connect-src must be restricted to self. Got: \(csp)")
+        XCTAssertTrue(csp.contains("form-action 'none'"),
+                      "Form submission must be blocked. Got: \(csp)")
+        XCTAssertTrue(csp.contains("default-src 'self'"),
+                      "default-src must be restricted to self. Got: \(csp)")
+        // Inline/eval must stay allowed or legitimate single-file HTML breaks.
+        XCTAssertTrue(csp.contains("'unsafe-inline'"),
+                      "Inline script is required by real single-file documents. Got: \(csp)")
+    }
+
+    func testAllResponsesCarryNoSniff() throws {
+        for path in ["index.html", "style.css", "pic.png"] {
+            let header = try headers(for: path)
+            XCTAssertEqual(header["x-content-type-options"], "nosniff",
+                           "\(path) should be served with nosniff.")
+        }
+    }
+
+    /// Non-HTML assets do not need a CSP; adding one there would be noise.
+    func testNonHTMLAssetsAreNotGivenACSP() throws {
+        let header = try headers(for: "style.css")
+        XCTAssertNil(header["content-security-policy"],
+                     "A stylesheet does not need a CSP header.")
+    }
+}

@@ -63,7 +63,7 @@ struct PageSettingsView: View {
                     } header: {
                         Text("Local Server")
                     } footer: {
-                        Text("PagePocket serves this document over a loopback-only HTTP address so relative links, fetch() and ES modules work exactly as they do on the web. Nothing is reachable from other devices.")
+                        Text("PagePocket serves this document over an HTTP address bound to this device only, so relative links, fetch() and ES modules work exactly as they do on the web. The address is not reachable from other devices. Pages you open can still reach the internet unless their content policy prevents it.")
                     }
                 }
 

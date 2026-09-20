@@ -11,8 +11,13 @@ import Network
 /// web apps — including ones that fetch data or use `<script type="module">` —
 /// behave exactly as they do on the web.
 ///
-/// The listener is restricted to the loopback interface and only ever serves
-/// files beneath a registered root, so nothing is exposed to the local network.
+/// The listener binds `127.0.0.1` directly and only ever serves files beneath a
+/// registered root, so its own traffic cannot leave the device.
+///
+/// That constrains the *server* only. The web view rendering those documents can
+/// still reach the network, so responses carry a Content-Security-Policy and
+/// `WebEngine` cancels navigation away from the document. See `LocalHTTPServer`
+/// and `WebEngine` for the enforced limits.
 final class LocalHTTPServer {
 
     /// Process-wide instance.
@@ -51,10 +56,16 @@ final class LocalHTTPServer {
         if listener != nil { return port }
 
         let parameters = NWParameters.tcp
-        // Never leave the device: loopback only, no Wi-Fi, no cellular, no Bonjour.
+        // Pin the bind address itself, not just the interface. `requiredInterfaceType`
+        // constrains which interface is *used*; `requiredLocalEndpoint` is what
+        // makes the socket bind 127.0.0.1 by construction, so "loopback only" is
+        // enforced by the kernel rather than inferred from a filter.
+        parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: .any)
         parameters.requiredInterfaceType = .loopback
-        parameters.allowLocalEndpointReuse = true
         parameters.includePeerToPeer = false
+        // (Removed `allowLocalEndpointReuse`: the port is kernel-assigned and
+        // ephemeral, so there is nothing to reuse, and if it maps to
+        // SO_REUSEPORT it would let another local process bind the same port.)
 
         let listener: NWListener
         do {
@@ -123,8 +134,13 @@ final class LocalHTTPServer {
 
     /// Exposes `directory` at `/r/<token>/`. Returns the URL prefix to use.
     ///
-    /// Each document gets its own random token so one document cannot address
-    /// another document's files by guessing a path.
+    /// Each document gets its own random token, which prevents one document from
+    /// addressing another's files by *guessing a path*.
+    ///
+    /// Note this is not document isolation in general: every document served on
+    /// this port shares one web origin (same scheme, host and port), so they
+    /// share localStorage and IndexedDB unless each gets its own data store —
+    /// which `WebEngine` arranges.
     @discardableResult
     func mount(directory: URL, token: String) -> String {
         mountsLock.lock()
@@ -310,6 +326,7 @@ final class LocalHTTPServer {
                     "Content-Length: \(data.count)",
                     "Content-Range: bytes \(range.lowerBound)-\(range.upperBound)/\(fileSize)",
                     "Accept-Ranges: bytes",
+                    "X-Content-Type-Options: nosniff",
                     "Cache-Control: no-store",
                     "Connection: close"
                 ]
@@ -321,21 +338,52 @@ final class LocalHTTPServer {
             return
         }
 
-        guard let data = try? handle.readToEnd() else {
+        // An empty file legitimately reads back as nil/empty; that is not an error.
+        let data: Data
+        do {
+            data = try handle.readToEnd() ?? Data()
+        } catch {
             sendSimple(status: 500, reason: "Internal Server Error", body: Data(),
                        contentType: "text/plain; charset=utf-8", on: connection)
             return
         }
 
-        let headers = [
+        var headers = [
             "HTTP/1.1 200 OK",
             "Content-Type: \(contentType)",
             "Content-Length: \(data.count)",
             "Accept-Ranges: bytes",
+            "X-Content-Type-Options: nosniff",
             // Documents are edited and re-imported constantly; never cache.
             "Cache-Control: no-store, must-revalidate",
             "Connection: close"
         ]
+
+        // Confine the document to its own origin.
+        //
+        // Imported HTML is untrusted, and without this a page can POST everything
+        // in its folder to a remote server. `connect-src 'self'` blocks fetch,
+        // XHR, WebSocket and sendBeacon to anywhere but this mount; the rest keeps
+        // the document self-contained while still allowing inline and blob assets,
+        // which real single-file HTML depends on.
+        if contentType.hasPrefix("text/html") || contentType.hasPrefix("application/xhtml") {
+            headers.append(
+                "Content-Security-Policy: "
+                + "default-src 'self' blob: data: 'unsafe-inline' 'unsafe-eval'; "
+                + "connect-src 'self' blob: data:; "
+                + "img-src 'self' blob: data:; "
+                + "media-src 'self' blob: data:; "
+                + "font-src 'self' data:; "
+                + "style-src 'self' blob: data: 'unsafe-inline'; "
+                + "script-src 'self' blob: data: 'unsafe-inline' 'unsafe-eval'; "
+                + "frame-src 'self' blob: data:; "
+                + "worker-src 'self' blob:; "
+                + "form-action 'none'; "
+                + "frame-ancestors 'self'; "
+                + "base-uri 'self'"
+            )
+        }
+
         send(headers: headers, body: method == "HEAD" ? Data() : data, on: connection)
     }
 
@@ -347,6 +395,7 @@ final class LocalHTTPServer {
             "HTTP/1.1 \(status) \(reason)",
             "Content-Type: \(contentType)",
             "Content-Length: \(body.count)",
+            "X-Content-Type-Options: nosniff",
             "Cache-Control: no-store",
             "Connection: close"
         ]
@@ -365,6 +414,13 @@ final class LocalHTTPServer {
 
     /// Parses a single-range `bytes=a-b` header.
     private func parseRange(_ header: String, fileSize: Int64) -> ClosedRange<Int64>? {
+        // A zero-byte file has no valid byte range. Without this guard the suffix
+        // branch below would build `0...(-1)`, and constructing an invalid Range
+        // is a Swift runtime trap (not a throwable error) — on the server queue
+        // that kills the whole process. `fetch('empty.txt', {headers:{Range:'bytes=-1'}})`
+        // from any imported page was therefore a one-line remote crash.
+        guard fileSize > 0 else { return nil }
+
         guard header.lowercased().hasPrefix("bytes=") else { return nil }
         let spec = header.dropFirst("bytes=".count)
         // Multipart ranges are not supported; fall back to a full response.

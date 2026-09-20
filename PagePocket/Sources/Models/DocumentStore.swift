@@ -72,29 +72,70 @@ final class DocumentStore: ObservableObject {
     ///
     /// Older builds had no duplicate check, so opening the same file twice left
     /// two identical entries in the library. Removes the later one and deletes
-    /// its folder, keeping whichever copy was opened most recently.
+    /// its folder, keeping whichever copy came first.
+    ///
+    /// Deliberately conservative: this runs during `init()`, so anything it
+    /// loads is loaded before the UI exists. A single huge entry file would
+    /// therefore OOM the app on every launch with no way to delete it from
+    /// inside the app. Files above `dedupeSizeLimit` are left alone, and the
+    /// comparison is skipped entirely unless names and sizes already match.
     private func removeDuplicates() {
-        var seen: [String: Int] = [:]   // content hash -> index in `documents`
+        /// Only files this small are considered; a large video or archive is
+        /// never a duplicate worth risking a launch crash over.
+        let dedupeSizeLimit = 8 << 20   // 8 MB
+
+        var seenKeys = Set<String>()
         var survivors: [Document] = []
         var removed = 0
 
         for document in documents {
-            guard let data = try? Data(contentsOf: document.entryURL) else {
+            let values = try? document.entryURL.resourceValues(forKeys: [.fileSizeKey])
+            let fileSize = values?.fileSize ?? 0
+
+            guard fileSize > 0, fileSize <= dedupeSizeLimit else {
                 survivors.append(document)
                 continue
             }
 
-            // A cheap, stable identity: name plus size plus a content digest.
-            let key = "\(document.originalFileName)|\(data.count)|\(data.hashValue)"
-            if seen[key] != nil {
-                // Duplicate: drop the folder and skip the record.
-                try? fileManager.removeItem(at: document.folderURL)
-                removed += 1
+            // Cheap discriminator first: only read bytes when name AND size
+            // already agree, which is rare.
+            let cheapKey = "\(document.originalFileName)|\(fileSize)"
+            let alreadyCandidate = survivors.contains { candidate in
+                guard let candidateSize = try? candidate.entryURL
+                    .resourceValues(forKeys: [.fileSizeKey]).fileSize else { return false }
+                return candidate.originalFileName == document.originalFileName
+                    && candidateSize == fileSize
+            }
+
+            guard alreadyCandidate else {
+                seenKeys.insert(cheapKey)
+                survivors.append(document)
                 continue
             }
 
-            seen[key] = survivors.count
-            survivors.append(document)
+            // Full byte comparison, with a hard cap so a pathological file
+            // cannot exhaust memory here.
+            guard let incoming = try? Data(contentsOf: document.entryURL, options: .mappedIfSafe),
+                  incoming.count <= dedupeSizeLimit else {
+                survivors.append(document)
+                continue
+            }
+
+            let duplicateOf = survivors.first { candidate in
+                guard candidate.originalFileName == document.originalFileName else { return false }
+                guard let existing = try? Data(contentsOf: candidate.entryURL, options: .mappedIfSafe) else {
+                    return false
+                }
+                return existing == incoming
+            }
+
+            if duplicateOf != nil {
+                try? fileManager.removeItem(at: document.folderURL)
+                removed += 1
+            } else {
+                seenKeys.insert(cheapKey)
+                survivors.append(document)
+            }
         }
 
         if removed > 0 {
@@ -272,14 +313,25 @@ final class DocumentStore: ObservableObject {
 
     /// Finds an existing document whose entry file is identical to `source`.
     ///
-    /// Compares size first (cheap) and only then the bytes, so the common
-    /// no-match case stays fast.
+    /// Bounded on purpose: the source is untrusted input, so a multi-gigabyte
+    /// file must not be read into memory just to decide whether it is a
+    /// duplicate. Anything above the limit is simply treated as new.
     private func existingDocument(matching source: URL) -> Document? {
-        guard let incoming = try? Data(contentsOf: source) else { return nil }
+        let limit = 8 << 20   // 8 MB
+
+        guard let sourceSize = try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              sourceSize > 0, sourceSize <= limit else { return nil }
 
         for document in documents {
             guard document.originalFileName == source.lastPathComponent else { continue }
-            guard let existing = try? Data(contentsOf: document.entryURL) else { continue }
+            guard let existingSize = try? document.entryURL
+                .resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                  existingSize == sourceSize else { continue }
+
+            guard let incoming = try? Data(contentsOf: source, options: .mappedIfSafe),
+                  let existing = try? Data(contentsOf: document.entryURL, options: .mappedIfSafe) else {
+                continue
+            }
             if existing == incoming { return document }
         }
         return nil

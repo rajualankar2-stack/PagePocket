@@ -65,6 +65,16 @@ final class WebEngine: NSObject, ObservableObject {
         preferences.allowsContentJavaScript = true
         configuration.defaultWebpagePreferences = preferences
 
+        // Give each document its own storage, non-persistent and isolated.
+        //
+        // Same-origin policy is scoped to scheme://host:port — NOT path — so
+        // every document served on this loopback port shares one origin. With
+        // the default data store they would also share localStorage, IndexedDB
+        // and cookies, letting a hostile file read whatever a legitimate
+        // AI-generated app had stored. A non-persistent store per engine keeps
+        // documents isolated from each other and leaves nothing behind.
+        configuration.websiteDataStore = .nonPersistent()
+
         // Install the console bridge BEFORE the web view is created.
         //
         // `WKWebView.init(frame:configuration:)` *copies* the configuration, so
@@ -82,7 +92,6 @@ final class WebEngine: NSObject, ObservableObject {
 
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
-
         // Now that `self` is fully initialised, point the proxy at it. The
         // handler is registered on the *live* controller, which is the copy the
         // web view actually uses.
@@ -259,14 +268,26 @@ final class WebEngine: NSObject, ObservableObject {
         })();
         """
 
-        return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
     }
+
+    /// Largest console message kept, in characters.
+    ///
+    /// The 500-message cap bounds the *count*, not the size: without this,
+    /// `for(;;) console.log('A'.repeat(50e6))` would pin gigabytes of native
+    /// memory and flood the main actor.
+    private static let maxConsoleMessageLength = 4096
 
     /// Appends a message relayed from the page's console.
     func recordConsoleMessage(level: String, text: String) {
         guard !text.isEmpty else { return }
+
+        let clipped = text.count > Self.maxConsoleMessageLength
+            ? String(text.prefix(Self.maxConsoleMessageLength)) + "… (truncated)"
+            : text
+
         let parsedLevel = ConsoleMessage.Level(rawValue: level) ?? .log
-        consoleMessages.append(ConsoleMessage(level: parsedLevel, text: text, timestamp: Date()))
+        consoleMessages.append(ConsoleMessage(level: parsedLevel, text: clipped, timestamp: Date()))
         // Keep memory bounded during long-running pages.
         if consoleMessages.count > 500 {
             consoleMessages.removeFirst(consoleMessages.count - 500)
@@ -480,14 +501,20 @@ extension WebEngine: WKNavigationDelegate {
             return .cancel
         }
 
-        // A user-initiated link to the open web: hand it to the system.
+        // A user-clicked link to the open web.
         if navigationAction.navigationType == .linkActivated {
             externalURLRequest = url
             return .cancel
         }
 
-        // Subresource or scripted load: let it proceed normally.
-        return .allow
+        // Everything else — including a scripted `location.href = 'https://…'` —
+        // must NOT be rendered. This delegate is the only place that sees
+        // top-level navigation, and there is no address bar, so a remote page
+        // here would be indistinguishable from the user's own document: the
+        // navigation title is the page's own <title>. Cancelling keeps a hostile
+        // document from replacing itself with a convincing phishing page.
+        externalURLRequest = url
+        return .cancel
     }
 }
 

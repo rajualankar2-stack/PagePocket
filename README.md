@@ -249,11 +249,22 @@ A security-scoped bookmark to a folder the user picked can be revoked, and the f
 
 ---
 
-## Privacy
+## Privacy and security
 
-PagePocket has **no network client**. It never fetches anything from the internet. The only server it talks to is itself, on `127.0.0.1`, bound to loopback so it is unreachable from other devices. There is no analytics, no tracking, and no account.
+**The Swift code makes no network requests.** It never phones home; there is no analytics, no tracking and no account.
 
-External links you tap are handed to Safari — PagePocket itself never loads them.
+**But that is not the same as "documents cannot reach the network."** The HTML you open is untrusted content running in a real web view. PagePocket therefore contains it:
+
+- **A Content-Security-Policy is served with every HTML response**, restricting `connect-src` to the document's own origin, so a hostile page cannot ship your files off with `fetch()`, `XMLHttpRequest`, `WebSocket` or `sendBeacon`.
+- **Navigating away is cancelled.** A scripted `location.href = 'https://evil.example'` cannot silently replace your page with a remote site. You are asked before anything opens in Safari.
+- **Each document gets its own storage.** All documents share one origin (`http://127.0.0.1:<port>`), so without this a hostile file could read what another document left in `localStorage`. Storage is per-document and non-persistent.
+- **The local server binds `127.0.0.1` directly**, so it is unreachable from other devices.
+- **The console bridge runs only in the document's own top frame**, so an embedded foreign frame cannot reach native code.
+- **Imported `.zip` archives are bounded** (64 MB per file, 512 MB total, 200:1 ratio), so a decompression bomb fails with an error instead of killing the app.
+
+External links you tap open in Safari, with a confirmation first.
+
+If you are auditing this app, the security-relevant logic lives in `LocalHTTPServer.swift` (the server), `WebEngine.swift` (the web view and its navigation policy) and `ZipExtractor.swift` (the archive parser).
 
 ---
 

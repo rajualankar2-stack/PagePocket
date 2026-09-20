@@ -16,6 +16,10 @@ enum ZipExtractor {
         case unsupportedCompression(UInt16)
         case unsafePath(String)
         case inflateFailed(String)
+        case entryTooLarge(String, Int)
+        case archiveTooLarge(Int64)
+        case suspiciousRatio(String, Int)
+        case tooManyEntries(Int)
 
         var errorDescription: String? {
             switch self {
@@ -24,16 +28,41 @@ enum ZipExtractor {
             case .unsupportedCompression(let method): return "unsupported compression method \(method)"
             case .unsafePath(let path): return "the archive contains an unsafe path (\(path))"
             case .inflateFailed(let name): return "“\(name)” could not be decompressed"
+            case .entryTooLarge(let name, let size):
+                return "“\(name)” is \(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)), which is larger than PagePocket will extract"
+            case .archiveTooLarge(let total):
+                return "the archive expands to more than \(ByteCountFormatter.string(fromByteCount: 512 << 20, countStyle: .file)) (reached \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)))"
+            case .suspiciousRatio(let name, let ratio):
+                return "“\(name)” expands \(ratio)×, which looks like a decompression bomb"
+            case .tooManyEntries(let count):
+                return "the archive contains \(count) entries, more than PagePocket will extract"
             }
         }
     }
+
+    /// Extraction budgets.
+    ///
+    /// Deflate reaches ~1030:1 on compressible data, so a 400 KB archive can
+    /// expand to 400 MB. Measured against this extractor: a 407 KB ZIP produced
+    /// 426 MB resident and 400 MB on disk in under a second — past the jetsam
+    /// limit on most iPhones. These caps are what make that fail cleanly instead
+    /// of killing the app.
+    private static let maxEntrySize = 64 << 20            // 64 MB per file
+    private static let maxTotalSize: Int64 = 512 << 20    // 512 MB per archive
+    private static let maxCompressionRatio = 200          // well above real content
+    private static let maxEntryCount = 4096               // sane bundle ceiling
 
     /// Extracts every entry into `destination`, creating subdirectories as needed.
     static func extract(archiveAt archiveURL: URL, to destination: URL) throws {
         let data = try Data(contentsOf: archiveURL, options: .mappedIfSafe)
         let entries = try readCentralDirectory(in: data)
 
+        guard entries.count <= maxEntryCount else {
+            throw ZipError.tooManyEntries(entries.count)
+        }
+
         let fileManager = FileManager.default
+        var totalWritten: Int64 = 0
 
         for entry in entries {
             // Skip macOS resource forks and directory markers.
@@ -42,9 +71,29 @@ enum ZipExtractor {
             if entry.name.hasSuffix(".DS_Store") { continue }
 
             let relative = try sanitize(entry.name)
-            // Reject absolute paths and traversal before touching the disk.
+            // Reject traversal before touching the disk.
             guard !relative.hasPrefix("/"), !relative.split(separator: "/").contains("..") else {
                 throw ZipError.unsafePath(entry.name)
+            }
+
+            let declared = Int(entry.uncompressedSize)
+
+            // Reject a single entry that is too large, or whose declared size is
+            // wildly out of proportion to its compressed size (a bomb).
+            guard declared <= maxEntrySize else {
+                throw ZipError.entryTooLarge(entry.name, declared)
+            }
+            if entry.compressedSize > 0 {
+                let ratio = declared / max(entry.compressedSize, 1)
+                guard ratio <= maxCompressionRatio else {
+                    throw ZipError.suspiciousRatio(entry.name, ratio)
+                }
+            }
+
+            // Reject an archive whose entries add up to more than the budget.
+            totalWritten += Int64(declared)
+            guard totalWritten <= maxTotalSize else {
+                throw ZipError.archiveTooLarge(totalWritten)
             }
 
             let outputURL = destination.appendingPathComponent(relative)
@@ -60,9 +109,14 @@ enum ZipExtractor {
             case 0:
                 contents = payload
             case 8:
-                contents = try inflate(payload, expectedSize: Int(entry.uncompressedSize), name: entry.name)
+                contents = try inflate(payload, expectedSize: declared, name: entry.name)
             default:
                 throw ZipError.unsupportedCompression(entry.compressionMethod)
+            }
+
+            // Guard against an entry that inflates larger than it declared.
+            guard contents.count <= maxEntrySize else {
+                throw ZipError.entryTooLarge(entry.name, contents.count)
             }
 
             try contents.write(to: outputURL, options: .atomic)

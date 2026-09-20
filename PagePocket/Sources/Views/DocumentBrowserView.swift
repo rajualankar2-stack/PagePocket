@@ -360,7 +360,11 @@ struct DocumentBrowserView: View {
     private var dialogBinding: Binding<Bool> {
         Binding(
             get: { session.engine.activeDialog != nil },
-            set: { if !$0 { session.engine.activeDialog = nil } }
+            // Must resolve through the engine, not by nilling the dialog:
+            // WebKit's completion handler has to be called or the page's
+            // alert()/confirm()/prompt() never returns, and WebKit raises an
+            // uncaught exception when the block deallocates un-called.
+            set: { if !$0 { session.engine.cancelActiveDialog() } }
         )
     }
 
@@ -394,7 +398,9 @@ struct DocumentBrowserView: View {
             Button("Cancel", role: .cancel) { session.engine.resolveDialog(confirm: false) }
             Button("OK") { session.engine.resolveDialog(confirm: true) }
         case .prompt:
-            // The text field is bound through the settings sheet to keep state simple.
+            // The text field has to live inside the alert, so its value is
+            // captured here rather than in an unrelated sheet.
+            TextField("Value", text: $promptBuffer)
             Button("Cancel", role: .cancel) { session.engine.resolveDialog(confirm: false) }
             Button("OK") { session.engine.resolveDialog(confirm: true, promptValue: promptBuffer) }
         case .none:

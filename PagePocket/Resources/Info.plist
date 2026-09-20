@@ -65,7 +65,6 @@
 			<array>
 				<string>public.html</string>
 				<string>public.xhtml</string>
-				<string>public.url</string>
 			</array>
 		</dict>
 		<dict>
@@ -73,8 +72,10 @@
 			<string>Web Archive Bundle</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
+			<!-- Alternate, not Owner: PagePocket views HTML bundles, it is not the
+			     system's handler for every ZIP file on the device. -->
 			<key>LSHandlerRank</key>
-			<string>Owner</string>
+			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.pkware.zip-archive</string>
@@ -94,8 +95,6 @@
 	     the local-networking allowance. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>127.0.0.1</key>
