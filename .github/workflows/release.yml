@@ -32,6 +32,8 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           # The annotated tag's message becomes the "What's New" text in AltStore.
+          # actions/checkout rewrites the tag as lightweight, so fetch the real one.
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           NOTES=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN/,$d')
           [ -n "$NOTES" ] || NOTES="PagePocket $VERSION"
           { echo "notes<<EOF"; echo "$NOTES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
