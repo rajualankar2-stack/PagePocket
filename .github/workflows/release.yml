@@ -1,0 +1,75 @@
+name: Release
+
+# Push a tag like v1.0.0 to build PagePocket.ipa, publish it as a GitHub
+# Release, and add it to the AltStore source (altstore/source.json).
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: v
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # The annotated tag's message becomes the "What's New" text in AltStore.
+          NOTES=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN/,$d')
+          [ -n "$NOTES" ] || NOTES="PagePocket $VERSION"
+          { echo "notes<<EOF"; echo "$NOTES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Build IPA
+        run: scripts/build-ipa.sh "${{ steps.v.outputs.version }}" "${{ steps.v.outputs.build }}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ steps.v.outputs.notes }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/ipa/PagePocket.ipa \
+            --title "PagePocket ${{ steps.v.outputs.version }}" \
+            --notes "$NOTES" \
+          || gh release upload "$GITHUB_REF_NAME" build/ipa/PagePocket.ipa --clobber
+
+      - name: Update AltStore source on main
+        env:
+          NOTES: ${{ steps.v.outputs.notes }}
+        run: |
+          cp build/ipa/PagePocket.ipa "$RUNNER_TEMP/PagePocket.ipa"
+          git checkout main
+          git pull --ff-only origin main
+          python3 scripts/update-altstore-source.py \
+            "${{ steps.v.outputs.version }}" \
+            "${{ steps.v.outputs.build }}" \
+            "$RUNNER_TEMP/PagePocket.ipa" \
+            "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME/PagePocket.ipa" \
+            "$NOTES"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add altstore/source.json
+          git commit -m "AltStore source: $GITHUB_REF_NAME [skip ci]"
+          git push origin main

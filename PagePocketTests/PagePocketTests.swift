@@ -560,6 +560,21 @@ final class SharedInboxTests: XCTestCase {
         }
     }
 
+    /// AltStore renames the group per team; a direct install keeps the base name.
+    func testAppGroupResolvesAltStoreRename() {
+        let base = SharedInbox.baseAppGroupIdentifier
+        XCTAssertEqual(SharedInbox.resolveAppGroup(altAppGroups: nil), base)
+        XCTAssertEqual(SharedInbox.resolveAppGroup(altAppGroups: []), base)
+        XCTAssertEqual(SharedInbox.resolveAppGroup(altAppGroups: ["\(base).ABCDE12345"]), "\(base).ABCDE12345")
+        XCTAssertEqual(
+            SharedInbox.resolveAppGroup(altAppGroups: ["group.com.other.ABCDE12345", "\(base).ABCDE12345"]),
+            "\(base).ABCDE12345",
+            "Unrelated groups must be ignored."
+        )
+        XCTAssertEqual(SharedInbox.resolveAppGroup(altAppGroups: ["\(base)extra.X"]), base,
+                       "A group that merely shares a prefix is not ours.")
+    }
+
     func testAppGroupContainerIsReachable() throws {
         try requireContainer()
 

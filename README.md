@@ -126,7 +126,28 @@ Wired is the reliable option:
 
 If the device does not appear, check `xcrun devicectl list devices` — it lists only genuinely connected hardware.
 
-### Option B — just build it in CI
+### Option B — AltStore / SideStore (no Xcode needed)
+
+Add this source in AltStore or SideStore (**Browse → Sources → +**):
+
+```
+https://raw.githubusercontent.com/rajualankar2-stack/PagePocket/main/altstore/source.json
+```
+
+then install PagePocket from it. AltStore re-signs the app with your own Apple ID, so with a free account it must refresh every 7 days (AltStore does this in the background while AltServer is reachable). PagePocket uses two App IDs (app + Share Extension) of a free account's three.
+
+AltStore renames the App Group to `group.com.pagepocket.app.<TEAMID>`; `SharedInbox` reads the new name from `ALTAppGroups` in Info.plist, so sharing to PagePocket keeps working.
+
+**Publishing a new version:** push an annotated tag. `.github/workflows/release.yml` builds `PagePocket.ipa`, attaches it to a GitHub Release, and adds it to the source — the tag message becomes the "What's New" text.
+
+```bash
+git tag -a v1.0.1 -m "What changed"
+git push origin v1.0.1
+```
+
+To build the IPA locally: `scripts/build-ipa.sh 1.0.1` → `build/ipa/PagePocket.ipa`.
+
+### Option C — just build it in CI
 
 `.github/workflows/build.yml` builds the app, boots a simulator, installs and launches it, and uploads a screenshot as an artifact. Push to `main` and check the **Actions** tab.
 

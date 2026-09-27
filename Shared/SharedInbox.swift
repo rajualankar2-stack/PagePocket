@@ -12,7 +12,24 @@ import Foundation
 enum SharedInbox {
 
     /// Must match `com.apple.security.application-groups` in both entitlement files.
-    static let appGroupIdentifier = "group.com.pagepocket.app"
+    static let baseAppGroupIdentifier = "group.com.pagepocket.app"
+
+    /// The group actually granted to this install.
+    ///
+    /// AltStore/SideStore re-sign with the user's own team and rename the group to
+    /// `group.com.pagepocket.app.<TEAMID>`, recording the new name under
+    /// `ALTAppGroups` in each bundle's Info.plist. Both the app and the extension
+    /// get the same rename, so they still agree.
+    static let appGroupIdentifier: String = resolveAppGroup(
+        altAppGroups: Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String]
+    )
+
+    static func resolveAppGroup(altAppGroups: [String]?) -> String {
+        altAppGroups?
+            .filter { $0 == baseAppGroupIdentifier || $0.hasPrefix(baseAppGroupIdentifier + ".") }
+            .min { $0.count < $1.count }
+            ?? baseAppGroupIdentifier
+    }
 
     /// The shared container, or `nil` if the App Group entitlement is missing.
     static var containerURL: URL? {

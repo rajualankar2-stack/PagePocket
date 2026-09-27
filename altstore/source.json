@@ -1,0 +1,28 @@
+{
+  "name": "PagePocket",
+  "identifier": "com.pagepocket.source",
+  "subtitle": "Open local HTML files like real web apps.",
+  "description": "The official AltStore source for PagePocket. New versions are published here automatically from GitHub releases.",
+  "iconURL": "https://raw.githubusercontent.com/rajualankar2-stack/PagePocket/main/PagePocket/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "website": "https://github.com/rajualankar2-stack/PagePocket",
+  "tintColor": "#3478F6",
+  "apps": [
+    {
+      "name": "PagePocket",
+      "bundleIdentifier": "com.pagepocket.app",
+      "developerName": "Raju Alankar",
+      "subtitle": "Open local HTML files like real web apps.",
+      "localizedDescription": "PagePocket opens local HTML files, folders and ZIP bundles from the Files app, iCloud Drive or the share sheet, and serves them from a private loopback server so fetch(), ES modules, Web Workers, localStorage and IndexedDB all work. Paste HTML and run it instantly.",
+      "iconURL": "https://raw.githubusercontent.com/rajualankar2-stack/PagePocket/main/PagePocket/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+      "tintColor": "#3478F6",
+      "category": "utilities",
+      "screenshots": [],
+      "versions": [],
+      "appPermissions": {
+        "entitlements": ["com.apple.security.application-groups"],
+        "privacy": {}
+      }
+    }
+  ],
+  "news": []
+}
