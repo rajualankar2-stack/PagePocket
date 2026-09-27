@@ -17,9 +17,21 @@
       "tintColor": "#3478F6",
       "category": "utilities",
       "screenshots": [],
-      "versions": [],
+      "versions": [
+        {
+          "version": "1.0.0",
+          "buildVersion": "1",
+          "date": "2026-09-27T04:08:18Z",
+          "localizedDescription": "Distribute via AltStore: IPA release workflow and source\n\n- SharedInbox resolves the App Group from ALTAppGroups, since AltStore\n  renames it per team; without this the Share Extension breaks.\n- scripts/build-ipa.sh builds an ad-hoc signed IPA that keeps the App\n  Group entitlement AltStore reads from the signature.\n- Tagging v* publishes a GitHub Release and updates altstore/source.json.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_011bwd5ibkw7v9C9JCszzFT3",
+          "downloadURL": "https://github.com/rajualankar2-stack/PagePocket/releases/download/v1.0.0/PagePocket.ipa",
+          "size": 1339007,
+          "minOSVersion": "17.0"
+        }
+      ],
       "appPermissions": {
-        "entitlements": ["com.apple.security.application-groups"],
+        "entitlements": [
+          "com.apple.security.application-groups"
+        ],
         "privacy": {}
       }
     }
